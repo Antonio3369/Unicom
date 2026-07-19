@@ -8,6 +8,7 @@ import {
   normalizePhone,
   normalizeSurname,
   parseRemark,
+  readExcelWorkbook,
 } from "@/services/import/helpers";
 
 export interface OrdersImportResult {
@@ -18,11 +19,25 @@ export interface OrdersImportResult {
   expiredRows: number;
 }
 
-export async function importOrdersFile(
+export interface OrdersImportPreview extends OrdersImportResult {
+  lateCompletedRows: number;
+  batchExpireRows: number;
+}
+
+export async function previewOrdersFile(
   filePath: string,
   refDate = new Date()
-): Promise<OrdersImportResult> {
-  const wb = XLSX.readFile(filePath);
+): Promise<OrdersImportPreview> {
+  return importOrdersFile(filePath, refDate, { dryRun: true });
+}
+
+export async function importOrdersFile(
+  filePath: string,
+  refDate = new Date(),
+  options?: { dryRun?: boolean }
+): Promise<OrdersImportResult | OrdersImportPreview> {
+  const dryRun = options?.dryRun ?? false;
+  const wb = await readExcelWorkbook(filePath);
   const sheet = wb.Sheets[wb.SheetNames[0]!]!;
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
 
@@ -32,11 +47,22 @@ export async function importOrdersFile(
     )
   );
 
+  const pendingSim = new Map<string, Date>();
+  if (dryRun) {
+    for (const o of await db.order.findMany({
+      where: { status: "PENDING", importKey: { not: null } },
+      select: { importKey: true, handleDate: true },
+    })) {
+      if (o.importKey) pendingSim.set(o.importKey, o.handleDate);
+    }
+  }
+
   let createdRows = 0;
   let updatedRows = 0;
   let skippedRows = 0;
   let anomalyRows = 0;
   let expiredRows = 0;
+  let lateCompletedRows = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -53,45 +79,51 @@ export async function importOrdersFile(
 
     if (!handleDate || !phone || !planType || Number.isNaN(rechargeAmount)) {
       anomalyRows++;
-      await db.anomalyRecord.create({
-        data: {
-          importType: "orders",
-          rowNumber: i + 2,
-          rawData: JSON.stringify(row),
-          reason: "缺少办理日、手机号、套餐或充值金额",
-          type: "MISSING_FIELDS",
-        },
-      });
+      if (!dryRun) {
+        await db.anomalyRecord.create({
+          data: {
+            importType: "orders",
+            rowNumber: i + 2,
+            rawData: JSON.stringify(row),
+            reason: "缺少办理日、手机号、套餐或充值金额",
+            type: "MISSING_FIELDS",
+          },
+        });
+      }
       continue;
     }
 
     const opener = salesByName.get(openerName);
     if (!opener || !opener.managerId) {
       anomalyRows++;
-      await db.anomalyRecord.create({
-        data: {
-          importType: "orders",
-          rowNumber: i + 2,
-          rawData: JSON.stringify(row),
-          reason: `未知业务员：${openerName}`,
-          type: "UNKNOWN_OPENER",
-        },
-      });
+      if (!dryRun) {
+        await db.anomalyRecord.create({
+          data: {
+            importType: "orders",
+            rowNumber: i + 2,
+            rawData: JSON.stringify(row),
+            reason: `未知业务员：${openerName}`,
+            type: "UNKNOWN_OPENER",
+          },
+        });
+      }
       continue;
     }
 
     const resolved = resolveImportStatus(rawStatus, handleDate, refDate);
     if (resolved === "ANOMALY") {
       anomalyRows++;
-      await db.anomalyRecord.create({
-        data: {
-          importType: "orders",
-          rowNumber: i + 2,
-          rawData: JSON.stringify(row),
-          reason: `无法识别状态：${rawStatus}`,
-          type: "INVALID_STATUS",
-        },
-      });
+      if (!dryRun) {
+        await db.anomalyRecord.create({
+          data: {
+            importType: "orders",
+            rowNumber: i + 2,
+            rawData: JSON.stringify(row),
+            reason: `无法识别状态：${rawStatus}`,
+            type: "INVALID_STATUS",
+          },
+        });
+      }
       continue;
     }
 
@@ -103,6 +135,11 @@ export async function importOrdersFile(
 
     if (!existing) {
       const status = resolved;
+      if (dryRun) {
+        createdRows++;
+        if (status === "PENDING") pendingSim.set(importKey, handleDate);
+        continue;
+      }
       await db.order.create({
         data: {
           handleDate,
@@ -141,6 +178,24 @@ export async function importOrdersFile(
     const excelCompleteFromOpen =
       resolved === "COMPLETED" &&
       (e.status === "PENDING" || e.status === "EXPIRED");
+
+    if (excelCompleteFromOpen) lateCompletedRows++;
+
+    if (dryRun) {
+      if (e.status === "EXPIRED" && !excelCompleteFromOpen) {
+        updatedRows++;
+        continue;
+      }
+      const nextStatus: OrderStatus = excelCompleteFromOpen
+        ? "COMPLETED"
+        : e.status === "PENDING"
+          ? resolved
+          : e.status;
+      updatedRows++;
+      if (nextStatus === "PENDING") pendingSim.set(importKey, handleDate);
+      else pendingSim.delete(importKey);
+      continue;
+    }
 
     // 已过期后 Excel 仍写待激活：保持过期，只更新备注类字段
     if (e.status === "EXPIRED" && !excelCompleteFromOpen) {
@@ -195,6 +250,24 @@ export async function importOrdersFile(
       },
     });
     updatedRows++;
+  }
+
+  if (dryRun) {
+    let batchExpireRows = 0;
+    for (const handleDate of pendingSim.values()) {
+      if (resolveImportStatus("待激活", handleDate, refDate) === "EXPIRED") {
+        batchExpireRows++;
+      }
+    }
+    return {
+      createdRows,
+      updatedRows,
+      skippedRows,
+      anomalyRows,
+      expiredRows,
+      lateCompletedRows,
+      batchExpireRows,
+    };
   }
 
   await db.importLog.create({

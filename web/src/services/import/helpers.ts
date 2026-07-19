@@ -1,3 +1,11 @@
+import { readFile } from "fs/promises";
+import * as XLSX from "xlsx";
+
+export async function readExcelWorkbook(filePath: string) {
+  const data = await readFile(filePath);
+  return XLSX.read(data, { type: "buffer" });
+}
+
 export function parseRemark(remark: unknown): {
   carrier: "UNICOM" | "MOBILE" | "OTHER" | null;
   backend: string | null;

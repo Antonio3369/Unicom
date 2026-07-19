@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { formatHandleDate } from "@/lib/date-utils";
-import { STATUS_LABELS, statusTone } from "@/lib/order-rules";
 import { notion } from "@/components/ui/notion";
+import { FollowUpBadge } from "@/components/orders/FollowUpBadge";
+import { OrderStatusBadges } from "@/components/orders/OrderStatusBadges";
 import type { OrderStatus } from "@/generated/prisma/client";
 
 export type QueueOrder = {
@@ -14,16 +15,21 @@ export type QueueOrder = {
   status: OrderStatus;
   opener: { name: string };
   daysLeft?: number;
+  planActivateAt?: Date | null;
+  pendingReason?: string | null;
+  followUpAt?: Date | null;
 };
 
 export function QueueTable({
   orders,
   emptyText,
   showDaysLeft = false,
+  showFollowUp = false,
 }: {
   orders: QueueOrder[];
   emptyText: string;
   showDaysLeft?: boolean;
+  showFollowUp?: boolean;
 }) {
   if (orders.length === 0) {
     return <p className="text-sm text-[#94a3b8] py-4">{emptyText}</p>;
@@ -36,6 +42,9 @@ export function QueueTable({
           <tr>
             {showDaysLeft && (
               <th className="text-left px-4 py-3 font-medium">剩余</th>
+            )}
+            {showFollowUp && (
+              <th className="text-left px-4 py-3 font-medium">跟进</th>
             )}
             {["办理日", "客户", "手机号", "套餐", "开单人", "状态", ""].map((h) => (
               <th key={h || "act"} className="text-left px-4 py-3 font-medium">
@@ -62,6 +71,15 @@ export function QueueTable({
                   </span>
                 </td>
               )}
+              {showFollowUp && (
+                <td className="px-4 py-3">
+                  {o.status === "PENDING" || o.status === "EXPIRED" ? (
+                    <FollowUpBadge order={o} compact />
+                  ) : (
+                    <span className="text-xs text-[#94a3b8]">—</span>
+                  )}
+                </td>
+              )}
               <td className="px-4 py-3">{formatHandleDate(o.handleDate)}</td>
               <td className="px-4 py-3">{o.customerSurname}</td>
               <td className="px-4 py-3 font-mono text-sm text-[#111827]">{o.phone}</td>
@@ -70,11 +88,7 @@ export function QueueTable({
               </td>
               <td className="px-4 py-3">{o.opener.name}</td>
               <td className="px-4 py-3">
-                <span
-                  className={`inline-flex px-2 py-0.5 rounded border text-xs ${statusTone(o.status)}`}
-                >
-                  {STATUS_LABELS[o.status]}
-                </span>
+                <OrderStatusBadges status={o.status} handleDate={o.handleDate} />
               </td>
               <td className="px-4 py-3">
                 <Link href={`/orders/${o.id}`} className="text-[#2563eb] hover:underline">

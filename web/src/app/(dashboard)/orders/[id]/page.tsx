@@ -1,13 +1,19 @@
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { PageHeader, PageShell, NotionPanel } from "@/components/ui/notion";
 import { HistoryBackLink } from "@/components/ui/HistoryBackLink";
 import { getSessionUser } from "@/lib/session";
 import { getOrderForUser } from "@/services/orders";
 import { db } from "@/lib/db";
-import { getAccessibleUserIds } from "@/services/scope";
-import { STATUS_LABELS, CARRIER_LABELS } from "@/lib/order-rules";
-import { formatHandleDate } from "@/lib/date-utils";
+import { getActivatorOptions } from "@/services/scope";
+import { CARRIER_LABELS, hasFollowUp } from "@/lib/order-rules";
+import { formatHandleDate, formatFollowUpAt } from "@/lib/date-utils";
+import { FollowUpBadge } from "@/components/orders/FollowUpBadge";
 import { OrderDetailActions } from "@/components/orders/OrderDetailActions";
+import {
+  OrderStatusBadges,
+  orderStatusSummary,
+} from "@/components/orders/OrderStatusBadges";
 
 export default async function OrderDetailPage({
   params,
@@ -24,16 +30,7 @@ export default async function OrderDetailPage({
     notFound();
   }
 
-  const ids = await getAccessibleUserIds(user!);
-  const staffWhere =
-    ids === null
-      ? { role: "SALES" as const, status: "ACTIVE" as const }
-      : { id: { in: ids.filter((x) => x !== user!.id) }, role: "SALES" as const };
-
-  const staffOptions = await db.user.findMany({
-    where: staffWhere,
-    select: { id: true, name: true },
-  });
+  const staffOptions = await getActivatorOptions(user!);
   if (!staffOptions.find((s) => s.id === order.openerId)) {
     staffOptions.unshift({ id: order.opener.id, name: order.opener.name });
   }
@@ -47,11 +44,15 @@ export default async function OrderDetailPage({
       <HistoryBackLink label="← 返回" fallbackHref="/" />
       <PageHeader
         title={`业务详情 · ${order.phone}`}
-        meta={`${STATUS_LABELS[order.status]} · 开单人 ${order.opener.name}`}
+        meta={`${orderStatusSummary(order.status, order.handleDate)} · 开单人 ${order.opener.name}`}
       />
 
       <div className="grid lg:grid-cols-2 gap-6 mt-4">
         <NotionPanel className="space-y-3 text-sm">
+          <Row
+            label="状态"
+            value={<OrderStatusBadges status={order.status} handleDate={order.handleDate} />}
+          />
           <Row label="办理日" value={formatHandleDate(order.handleDate)} />
           <Row label="客户姓氏" value={order.customerSurname} />
           <Row label="手机号" value={order.phone} />
@@ -68,6 +69,31 @@ export default async function OrderDetailPage({
             value={order.activatedAt ? formatHandleDate(order.activatedAt) : "—"}
           />
           <Row label="备注" value={order.note ?? "—"} />
+          {(order.status === "PENDING" || order.status === "EXPIRED" || hasFollowUp(order)) && (
+            <>
+              <Row
+                label="跟进状态"
+                value={
+                  order.status === "PENDING" || order.status === "EXPIRED" ? (
+                    <FollowUpBadge order={order} />
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              <Row
+                label="计划激活"
+                value={
+                  order.planActivateAt ? formatHandleDate(order.planActivateAt) : "—"
+                }
+              />
+              <Row label="待激活原因" value={order.pendingReason?.trim() || "—"} />
+              <Row
+                label="跟进更新"
+                value={order.followUpAt ? formatFollowUpAt(order.followUpAt) : "—"}
+              />
+            </>
+          )}
           {order.wasEverExpired && (
             <Row label="过期记录" value={order.expiredReason ?? "曾系统过期"} />
           )}
@@ -80,6 +106,9 @@ export default async function OrderDetailPage({
             openerId: order.openerId,
             opener: order.opener,
             wasEverExpired: order.wasEverExpired,
+            planActivateAt: order.planActivateAt,
+            pendingReason: order.pendingReason,
+            followUpAt: order.followUpAt,
           }}
           staffOptions={staffOptions}
           backends={backends.length ? backends : ["佳足后台", "科华后台"]}
@@ -89,7 +118,7 @@ export default async function OrderDetailPage({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-4 border-b border-[#f1f5f9] pb-2">
       <span className="text-[#64748b]">{label}</span>

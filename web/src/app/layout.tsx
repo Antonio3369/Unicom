@@ -1,10 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "联通业务工作台",
   description: "罗湖联通业务录单与看板",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

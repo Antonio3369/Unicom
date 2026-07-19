@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { signIn, signOut } from "next-auth/react";
-import { NotionButton, NotionPanel, PageHeader, PageShell } from "@/components/ui/notion";
+import { NotionButton, NotionPanel, NotionAlert } from "@/components/ui/notion";
 import { NotionPasswordInput } from "@/components/ui/NotionPasswordInput";
+import { readApiError, networkErrorMessage } from "@/lib/api-error";
 
 export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
   // 锁定首登模式，避免改密成功后父级重渲染把 forced 打成 false
@@ -43,11 +44,11 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
           newPassword,
         }),
       });
-      const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "修改失败");
+        setError(await readApiError(res, "修改失败"));
         return;
       }
+      const data = await res.json();
 
       // 首登：用新密码静默重登，刷新 JWT，避免中间件再挡回改密页（Ali 同款）
       if (isForced || data.forced) {
@@ -72,22 +73,28 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
       setDoneHint("密码已更新，请使用新密码重新登录");
       await signOut({ redirect: false });
       window.location.href = "/login?passwordChanged=1";
-    } catch {
-      setError("网络错误，请重试");
+    } catch (e) {
+      setError(networkErrorMessage(e));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f6f9] flex items-center justify-center p-4">
-      <PageShell>
-        <div className="max-w-md mx-auto w-full">
-          <PageHeader
-            title="修改密码"
-            meta={isForced ? "首次登录须设置新密码后方可继续" : "修改登录密码"}
-          />
-          <NotionPanel className="mt-6">
+    <div className="min-h-[100dvh] bg-[#f4f6f9] flex items-center justify-center px-4 py-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="max-w-md mx-auto w-full">
+        <div className="mb-6">
+          <p className="text-xs font-semibold tracking-wide uppercase text-[#94a3b8]">
+            联通业务工作台
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#111827] tracking-tight mt-1">
+            修改密码
+          </h1>
+          {isForced && (
+            <p className="text-sm text-[#64748b] mt-2">首次登录须设置新密码后方可继续</p>
+          )}
+        </div>
+        <NotionPanel>
             {doneHint ? (
               <p className="text-sm text-emerald-700">{doneHint}</p>
             ) : (
@@ -122,7 +129,7 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
                     required
                   />
                 </label>
-                {error && <p className="text-sm text-rose-600">{error}</p>}
+                {error && <NotionAlert tone="error">{error}</NotionAlert>}
                 <NotionButton type="submit" disabled={loading} className="w-full">
                   {loading ? "保存中…" : isForced ? "保存并继续" : "保存新密码"}
                 </NotionButton>
@@ -130,7 +137,6 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
             )}
           </NotionPanel>
         </div>
-      </PageShell>
     </div>
   );
 }

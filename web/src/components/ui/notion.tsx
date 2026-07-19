@@ -12,9 +12,9 @@ export const notion = {
   thead: "bg-[#f8fafc] text-[#64748b]",
   row: "border-t border-[#f1f5f9] text-[#111827] hover:bg-[#f8fafc]/60",
   input:
-    "border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20",
+    "border border-[#e2e8f0] rounded-lg px-3 py-2.5 text-base sm:text-sm bg-white w-full min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20",
   select:
-    "border border-[#e2e8f0] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20",
+    "border border-[#e2e8f0] rounded-lg px-3 py-2.5 text-base sm:text-sm bg-white min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20",
 };
 
 export function PageShell({ children }: { children: ReactNode }) {
@@ -39,7 +39,7 @@ export function PageHeader({
         <h1 className={notion.title}>{title}</h1>
         {meta && <p className={notion.subtitle}>{meta}</p>}
       </div>
-      {actions}
+      {actions ? <div className="w-full lg:w-auto shrink-0">{actions}</div> : null}
     </div>
   );
 }
@@ -90,7 +90,7 @@ export function NotionButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg disabled:opacity-50 ${variants[variant]} ${className}`}
+      className={`inline-flex items-center justify-center px-4 py-2.5 min-h-[44px] text-sm font-medium rounded-lg disabled:opacity-50 ${variants[variant]} ${className}`}
     >
       {children}
     </button>
@@ -101,10 +101,12 @@ export function NotionLinkButton({
   href,
   children,
   variant = "secondary",
+  className = "",
 }: {
   href: string;
   children: ReactNode;
   variant?: "primary" | "secondary" | "ghost";
+  className?: string;
 }) {
   const variants = {
     primary: "text-white bg-[#2563eb] hover:bg-[#1d4ed8]",
@@ -114,7 +116,7 @@ export function NotionLinkButton({
   return (
     <Link
       href={href}
-      className={`inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg ${variants[variant]}`}
+      className={`inline-flex items-center justify-center px-4 py-2.5 min-h-[44px] text-sm font-medium rounded-lg ${variants[variant]} ${className}`.trim()}
     >
       {children}
     </Link>
@@ -160,4 +162,98 @@ export function StatCard({
     );
   }
   return <div className={className}>{body}</div>;
+}
+
+export function NotionAlert({
+  children,
+  tone = "error",
+}: {
+  children: ReactNode;
+  tone?: "error" | "success" | "warning" | "info";
+}) {
+  const tones = {
+    error: "bg-[#fef2f2] border-[#fecaca] text-[#b91c1c]",
+    success: "bg-[#ecfdf5] border-[#bbf7d0] text-[#047857]",
+    warning: "bg-[#fffbeb] border-[#fde68a] text-[#b45309]",
+    info: "bg-[#eff6ff] border-[#bfdbfe] text-[#1d4ed8]",
+  };
+  return (
+    <div className={`text-sm border rounded-[10px] px-3 py-2.5 space-y-1 ${tones[tone]}`}>
+      {children}
+    </div>
+  );
+}
+
+export function NotionProgressBar({
+  value,
+  label,
+}: {
+  value: number;
+  label: string;
+}) {
+  const clamped = Math.min(100, Math.max(0, Math.round(value)));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="text-[#64748b]">{label}</span>
+        <span className="text-[#111827] font-medium tabular-nums shrink-0">{clamped}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-[#e2e8f0] overflow-hidden">
+        <div
+          className="h-full rounded-full bg-[#2563eb] transition-[width] duration-300 ease-out"
+          style={{ width: `${clamped}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function NotionCallout({
+  children,
+  tone = "info",
+}: {
+  children: ReactNode;
+  tone?: "info" | "warning";
+}) {
+  const tones = {
+    info: "bg-[#eff6ff] border-[#bfdbfe] text-[#1e3a5f]",
+    warning: "bg-[#fffbeb] border-[#fde68a] text-[#92400e]",
+  };
+  return (
+    <div className={`rounded-[14px] border p-4 text-sm space-y-1 leading-relaxed ${tones[tone]}`}>
+      {children}
+    </div>
+  );
+}
+
+export function NotionTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+  disabled,
+}: {
+  tabs: { key: T; label: string }[];
+  active: T;
+  onChange: (key: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1 border-b border-[#eef2f7]">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(tab.key)}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors disabled:opacity-50 ${
+            active === tab.key
+              ? "border-[#2563eb] text-[#2563eb]"
+              : "border-transparent text-[#64748b] hover:text-[#111827]"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
 }

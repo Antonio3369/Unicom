@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { createOrder, listOrders } from "@/services/orders";
 import type { Carrier, OrderStatus } from "@/generated/prisma/client";
+import { errorResponse } from "@/lib/api-error";
 
 export async function GET(req: Request) {
   const user = await getSessionUser();
@@ -31,6 +32,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ order });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return errorResponse(e, 400, { fallback: "创建失败" });
   }
 }

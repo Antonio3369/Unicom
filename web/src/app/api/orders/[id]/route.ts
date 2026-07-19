@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { activateOrder, getOrderForUser, refundOrder, updatePendingInfo } from "@/services/orders";
+import { errorResponse, toUserError } from "@/lib/api-error";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
@@ -10,7 +11,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const order = await getOrderForUser(id, user);
     return NextResponse.json({ order });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 404 });
+    return NextResponse.json(
+      { error: toUserError(e, { fallback: "业务单不存在或无权查看" }) },
+      { status: 404 }
+    );
   }
 }
 
@@ -55,6 +59,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
     return NextResponse.json({ error: "未知操作" }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return errorResponse(e, 400, { fallback: "操作失败" });
   }
 }

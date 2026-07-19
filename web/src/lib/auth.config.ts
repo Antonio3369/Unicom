@@ -29,10 +29,24 @@ declare module "@auth/core/jwt" {
   }
 }
 
+const isDev = process.env.NODE_ENV !== "production";
+
 export const authConfig = {
   pages: { signIn: "/login" },
   session: { strategy: "jwt" },
+  // 与 middleware 共用：dev 下 HTTP + 局域网 IP 勿用 Secure Cookie
+  ...(isDev ? { useSecureCookies: false as const } : {}),
   callbacks: {
+    // dev 下 baseUrl 常为 localhost，手机用局域网 IP 时勿跳 localhost
+    redirect({ url }) {
+      if (url.startsWith("/")) return url;
+      try {
+        const { pathname, search, hash } = new URL(url);
+        return `${pathname}${search}${hash}` || "/";
+      } catch {
+        return "/";
+      }
+    },
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
       const isPublic = pathname.startsWith("/login") || pathname.startsWith("/api/auth");

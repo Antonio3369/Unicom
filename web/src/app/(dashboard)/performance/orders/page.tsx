@@ -8,12 +8,17 @@ import { HistoryBackLink } from "@/components/ui/HistoryBackLink";
 import { getSessionUser } from "@/lib/session";
 import { listOrders } from "@/services/orders";
 import {
-  STATUS_LABELS,
   CARRIER_LABELS,
-  statusTone,
   daysUntilExpire,
+  shouldShowPendingExpiredDual,
 } from "@/lib/order-rules";
 import { formatHandleDate } from "@/lib/date-utils";
+import { OrderStatusBadges } from "@/components/orders/OrderStatusBadges";
+import {
+  formatPerformanceMonthParam,
+  parsePerformanceMonth,
+  performanceMonthTitle,
+} from "@/lib/performance-month";
 import type { OrderStatus } from "@/generated/prisma/client";
 
 const TITLE: Record<string, string> = {
@@ -26,20 +31,38 @@ const TITLE: Record<string, string> = {
 export default async function PerformanceOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; month?: string }>;
 }) {
   const user = await getSessionUser();
-  const { status } = await searchParams;
+  const { status, month: monthRaw } = await searchParams;
   const statusFilter = status as OrderStatus | undefined;
-  const orders = await listOrders(user!, statusFilter);
+  const month = parsePerformanceMonth(monthRaw);
+  const monthParam = formatPerformanceMonthParam(month);
+  const monthTitle = performanceMonthTitle(month);
+
+  const orders = await listOrders(user!, {
+    status: statusFilter,
+    month,
+  });
   const title = (statusFilter && TITLE[statusFilter]) || "业务列表";
+
+  function listHref(value: string) {
+    const q = new URLSearchParams();
+    if (value) q.set("status", value);
+    q.set("month", monthParam);
+    const s = q.toString();
+    return `/performance/orders?${s}`;
+  }
 
   return (
     <PageShell>
-      <HistoryBackLink label="← 业绩复盘" fallbackHref="/performance" />
+      <HistoryBackLink
+        label="← 业绩复盘"
+        fallbackHref={`/performance?month=${monthParam}`}
+      />
       <PageHeader
         title={title}
-        meta={`业绩复盘下钻 · 共 ${orders.length} 条 · 权限范围与复盘一致`}
+        meta={`${monthTitle} · 办理日口径 · 共 ${orders.length} 条`}
       />
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -53,11 +76,7 @@ export default async function PerformanceOrdersPage({
         ).map(([value, label]) => (
           <Link
             key={value || "all"}
-            href={
-              value
-                ? `/performance/orders?status=${value}`
-                : "/performance/orders"
-            }
+            href={listHref(value)}
             className={`px-3 py-1.5 rounded-lg text-sm border ${
               (statusFilter ?? "") === value
                 ? "bg-[#eff6ff] border-[#bfdbfe] text-[#2563eb]"
@@ -94,12 +113,9 @@ export default async function PerformanceOrdersPage({
                   {o.planType}/{o.rechargeAmount}
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex px-2 py-0.5 rounded border text-xs ${statusTone(o.status)}`}
-                  >
-                    {STATUS_LABELS[o.status]}
-                  </span>
-                  {o.status === "PENDING" && (
+                  <OrderStatusBadges status={o.status} handleDate={o.handleDate} />
+                  {o.status === "PENDING" &&
+                    !shouldShowPendingExpiredDual(o.status, o.handleDate) && (
                     <span className="block text-xs text-[#94a3b8] mt-1">
                       剩余 {Math.max(0, daysUntilExpire(o.handleDate))} 天
                     </span>
@@ -122,7 +138,7 @@ export default async function PerformanceOrdersPage({
             {orders.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-[#94a3b8]">
-                  暂无业务单
+                  该月暂无业务单
                 </td>
               </tr>
             )}

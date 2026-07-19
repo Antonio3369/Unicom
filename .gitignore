@@ -4,6 +4,8 @@
 /data/*.xlsx
 /data/*.xls
 /data/*.csv
+web/data/*.xlsx
+web/data/*.xls
 
 # Nested app ignores also applied from web/.gitignore
 web/node_modules/

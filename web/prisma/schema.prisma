@@ -87,6 +87,7 @@ model Order {
   status              OrderStatus @default(PENDING)
   planActivateAt      DateTime?
   pendingReason       String?
+  followUpAt          DateTime?
   note                String?
   activatorId         String?
   activator           User?       @relation("OrderActivator", fields: [activatorId], references: [id])

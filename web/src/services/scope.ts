@@ -2,6 +2,38 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SessionUser } from "@/lib/permissions";
 import { PermissionError, assertUserInScope } from "@/lib/permissions";
+import { performanceMonthRange } from "@/lib/performance-month";
+
+/** 经理 Web 开单：本人或本队队员 */
+export async function getCreateOpenerOptions(user: SessionUser) {
+  if (user.role !== "MANAGER") return [];
+  const subs = await db.user.findMany({
+    where: { managerId: user.id, role: "SALES", status: "ACTIVE" },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  return [{ id: user.id, name: `${user.name}（本人）` }, ...subs];
+}
+
+/** 激活人下拉：ADMIN 全部队员；MANAGER 本人+本队；SALES 由调用方补开单人 */
+export async function getActivatorOptions(user: SessionUser) {
+  if (user.role === "ADMIN") {
+    return db.user.findMany({
+      where: { role: "SALES", status: "ACTIVE" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  }
+  if (user.role === "MANAGER") {
+    const subs = await db.user.findMany({
+      where: { managerId: user.id, role: "SALES", status: "ACTIVE" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    return [{ id: user.id, name: `${user.name}（本人）` }, ...subs];
+  }
+  return [];
+}
 
 export async function getAccessibleUserIds(user: SessionUser): Promise<string[] | null> {
   if (user.role === "ADMIN") return null;
@@ -27,7 +59,8 @@ export async function buildOrderWhere(
   return { AND: [scope, extra] };
 }
 
-export async function getManagerSummaries() {
+export async function getManagerSummaries(monthRef: Date) {
+  const range = performanceMonthRange(monthRef);
   const managers = await db.user.findMany({
     where: { role: "MANAGER", status: "ACTIVE" },
     orderBy: { name: "asc" },
@@ -41,23 +74,39 @@ export async function getManagerSummaries() {
       })
     ).map((s) => s.id);
     const orders = await db.order.findMany({
-      where: { openerId: { in: staffIds } },
+      where: {
+        openerId: { in: staffIds },
+        handleDate: range,
+      },
     });
+    const completed = orders.filter((o) => o.status === "COMPLETED").length;
+    const total = orders.length;
     result.push({
-      manager: m,
-      total: orders.length,
+      id: m.id,
+      name: m.name,
+      total,
       pending: orders.filter((o) => o.status === "PENDING").length,
-      completed: orders.filter((o) => o.status === "COMPLETED").length,
+      completed,
       expired: orders.filter((o) => o.status === "EXPIRED").length,
       refunded: orders.filter((o) => o.status === "REFUNDED").length,
+      lateCompleted: orders.filter(
+        (o) => o.status === "COMPLETED" && o.wasEverExpired
+      ).length,
+      completeRate: total > 0 ? Math.round((completed / total) * 100) : 0,
     });
   }
+  result.sort((a, b) => {
+    if (b.completed !== a.completed) return b.completed - a.completed;
+    if (b.total !== a.total) return b.total - a.total;
+    return a.name.localeCompare(b.name, "zh");
+  });
   return result;
 }
 
-/** 人员明细排名（按开单人）；范围随登录角色 */
-export async function getStaffRanking(user: SessionUser) {
+/** 队员排行榜（按开单人 · 办理日落所选月）；范围随登录角色 */
+export async function getStaffRanking(user: SessionUser, monthRef: Date) {
   const ids = await getAccessibleUserIds(user);
+  const range = performanceMonthRange(monthRef);
   const staff = await db.user.findMany({
     where: {
       role: "SALES",
@@ -70,8 +119,10 @@ export async function getStaffRanking(user: SessionUser) {
     orderBy: { name: "asc" },
   });
 
-  const orderWhere: Prisma.OrderWhereInput =
-    ids === null ? {} : { openerId: { in: ids } };
+  const orderWhere: Prisma.OrderWhereInput = {
+    handleDate: range,
+    ...(ids === null ? {} : { openerId: { in: ids } }),
+  };
   const orders = await db.order.findMany({
     where: orderWhere,
     select: { openerId: true, status: true, wasEverExpired: true },
@@ -128,8 +179,12 @@ export async function getStaffRanking(user: SessionUser) {
   return rows;
 }
 
-/** 队员业绩下钻：权限内开单人详情 + 业务单 */
-export async function getStaffPerformance(user: SessionUser, staffId: string) {
+/** 队员业绩下钻：权限内开单人详情 + 业务单（可选按办理月） */
+export async function getStaffPerformance(
+  user: SessionUser,
+  staffId: string,
+  monthRef?: Date
+) {
   const ids = await getAccessibleUserIds(user);
   assertUserInScope(user, staffId, ids);
 
@@ -141,8 +196,11 @@ export async function getStaffPerformance(user: SessionUser, staffId: string) {
     throw new PermissionError("队员不存在或无权查看");
   }
 
+  const extra: Prisma.OrderWhereInput = { openerId: staffId };
+  if (monthRef) extra.handleDate = performanceMonthRange(monthRef);
+
   const orders = await db.order.findMany({
-    where: await buildOrderWhere(user, { openerId: staffId }),
+    where: await buildOrderWhere(user, extra),
     include: {
       opener: { select: { name: true } },
       activator: { select: { name: true } },

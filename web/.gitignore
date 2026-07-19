@@ -38,6 +38,9 @@ yarn-error.log*
 *.db
 dev.db
 
+# uploaded import files (local sandbox)
+/uploads
+
 # vercel
 .vercel
 

@@ -4,7 +4,7 @@
 > 罗湖试点跑通后，再扩展其他地区经理团队。  
 > 本文档供下次开发前快速查阅。
 
-**最后更新**：2026-07-19（业绩复盘人员排名/下钻、今日待办卡片跳转、补录列表返回链路；代码已推 GitHub）
+**最后更新**：2026-07-20（经理 Web 开单/重办、移动端与局域网登录、权限与报错收口；代码已推 GitHub）
 
 **仓库**：[github.com/Antonio3369/Unicom](https://github.com/Antonio3369/Unicom)  
 **本地根目录**：`/Users/Eric/Desktop/agent/unicom`（应用在 `web/`，说明在本文档）
@@ -27,16 +27,20 @@
 
 ---
 
-## 2. 本阶段停在哪里（2026-07-19）
+## 2. 本阶段停在哪里（2026-07-20）
 
 ### 已具备（本地 + GitHub main）
 
-- 路径：`unicom/web`，开发端口 **http://localhost:1771**
-- 认证：角色登录、首登强制改密（静默 re-login）、密码显示切换
-- **今日待办**：四卡可点进对应队列；①今日截止 ②其余待激活 ③过期待补录 ④今日新开
-- **全部业务** / 新建 / 详情（激活、补录、退单、跟进、重办）；后台名可下拉+手输（`BackendDict`）
-- **业绩复盘**：汇总卡、补录质量、经理排行（ADMIN）、**人员明细排名**、队员下钻、补录列表下钻
-- **导入对账**（ADMIN）：人员 + 业绩 Excel；Seed 可导罗湖样例
+- 路径：`unicom/web`，开发端口 **http://localhost:1771**；`npm run dev` 绑定 `0.0.0.0` 并打印局域网地址供手机同 WiFi 访问
+- 认证：角色登录、首登强制改密（静默 re-login）、密码显示切换；**手机局域网登录**勿跳 `localhost`（见 §4 已知坑）
+- **今日待办**：四卡可点进对应队列；①今日截止 ②其余待激活 ③过期待补录 ④**本月已完成**
+- **全部业务**：待激活未跟进优先 + 筛选（未跟进 / 已跟进 / 今日截止）；双状态徽章（待激活+已过期）
+- **新建 / 重办**（`/orders/new`）：队员为自己开单；**经理可选开单人（本人或队员）**；过期单重办预填并关联 `linkedVoidOrderId`
+- **详情**：激活 / 补录 / 退单 / 跟进 / 重办；**经理激活人含本人**；后台名可下拉+手输（`BackendDict`）
+- **业绩复盘**：`?month=YYYY-MM` 按办理月；汇总卡、补录质量、**本月经理排行榜**（ADMIN）、**本月队员排行榜**、队员下钻
+- **导入对账**（ADMIN）：人员 + 业绩 Excel；预览 API + 上传写入；Seed / `dev:setup` 可导罗湖样例
+- **移动端**：safe-area、顶栏横向导航、触控尺寸；侧栏改密/退出
+- **报错**：`api-error.ts` 统一 API/页面用户可读文案
 - 滚动：`#app-scroll` + `ScrollMemory` / `HistoryBackLink`（详情返回列表位置）
 
 ### 未做（下次优先看 §14）
@@ -65,12 +69,22 @@
 
 ## 4. 本地开发
 
+**一键（新机器 / 清库后）**：
+
 ```bash
-cd /Users/Eric/Desktop/agent/unicom/web
+cd web
+npm run dev:setup    # install → generate → push →（有 web/data 则 seed）→ dev
+```
+
+**分步**：
+
+```bash
+cd web
 npm install
 cp .env.example .env
+npm run db:generate
 npm run db:push
-npm run db:seed          # 清空后需自行 delete + seed，或管理员页「导入罗湖数据」
+npm run db:seed          # 需 web/data/*.xlsx；或管理员页「导入对账」上传
 npm run dev              # http://localhost:1771
 ```
 
@@ -80,8 +94,8 @@ npm run dev              # http://localhost:1771
 |---|---|
 | `DATABASE_URL` | 默认 `file:./dev.db` |
 | `AUTH_SECRET` | 生产必改 |
-| `PERSONNEL_FILE` | 默认 `../data/罗湖联通业务员名单.xlsx` |
-| `ORDERS_FILE` | 默认 `../data/业绩登记模版-上传数据系统.xlsx` |
+| `PERSONNEL_FILE` | 默认 `./data/罗湖联通业务员名单.xlsx`（相对 `web/`） |
+| `ORDERS_FILE` | 默认 `./data/业绩登记模版-上传数据系统.xlsx` |
 
 ### 演示账号（密码均为 `123456`）
 
@@ -118,6 +132,9 @@ npm run build
 | 页面 500 / Edge fs 报错 | middleware 拉进了 Prisma | middleware 只 `NextAuth(authConfig)`，不要 `export { auth } from "@/lib/auth"` |
 | 7/17 全变过期 | Excel `7.17` 曾硬编码年份 2025 | `parseHandleDate` 用**当前年**（见 `src/lib/date-utils.ts`） |
 | 端口不对 | 需 `-p 1771` | `package.json` 的 `dev` 脚本已写死 |
+| 改 schema 后字段报错 / 500 | Prisma Client 被 dev 进程缓存 | `npm run db:generate` 后**重启** `npm run dev` |
+| 一键导入找不到文件 | `.env` 仍指 `../data` | 对齐 `web/data/`，见 `.env.example` |
+| 手机登录后空白登录页 | NextAuth 成功 URL 为 `localhost` | 勿设 `AUTH_URL=localhost`；`auth.config` 相对 redirect + `LoginForm` 跳 `/`；dev 下 `useSecureCookies: false` |
 
 ---
 
@@ -128,8 +145,8 @@ npm run build
 | 角色 | 英文 | 数据范围 | 能力 |
 |---|---|---|---|
 | 管理员 | ADMIN | 全量 | 导入、看板全量、经理排行 |
-| 经理 | MANAGER | 本队队员 + 自己 | 看本队单、可代操作 |
-| 队员 | SALES | 自己的单 | 录单、激活、退单、**补录** |
+| 经理 | MANAGER | 本队队员 + 自己 | 看本队单、代操作；**Web 开单/重办**（开单人=本人或队员）；激活可选本人 |
+| 队员 | SALES | 自己的单 | Web 录单、激活、退单、**补录** |
 
 ### 5.2 组织模型（勿再加公司层）
 
@@ -150,6 +167,11 @@ npm run build
 - ADMIN → `null`（全量）  
 - MANAGER → 自己 + `managerId = 自己` 的队员  
 - SALES → `[自己]`
+
+开单/激活下拉（经理也跑业务时）：  
+- `getCreateOpenerOptions` → 新建页开单人（本人 + 队员）  
+- `getActivatorOptions` → 详情激活人（本人 + 队员；ADMIN 为全部队员）  
+- 经理本人开单时 `Order.managerId = 经理.id`；队员开单时 `managerId = 队员.managerId`
 
 ---
 
@@ -194,6 +216,7 @@ npm run build
 | 例子（今天=7/19） | 7/17 待激活仍有效；7/16 及更早待激活 → 已过期 |
 | 口径 | **以系统为准**（不以口头 72h 争论） |
 | 计划激活时间 | 仅跟进用，**不阻止**系统过期 |
+| 待激活跟进 | 详情页保存 `planActivateAt` / `pendingReason`，写入 `followUpAt`；列表与详情展示 **已跟进 / 未跟进**（经理/管理员可见本队/全量） |
 
 判定式：`批处理日 > 办理日 + 2 天` → 待激活改为已过期。
 
@@ -227,22 +250,23 @@ Web 是滞后录入工具，**已过期 ≠ 焊死**：
 |---|---|
 | `/login` | 登录 |
 | `/settings/password` | 改密 / 首登强制改密 |
-| `/` | **今日待办**：顶部四卡可滚动定位；①今日截止 ②其余待激活 ③过期待补录 ④今日新开 |
-| `/orders` | **全部业务**（检索筛选，非主工作面） |
-| `/orders/new` | 新建业务（`?linkedVoidOrderId=` 重办） |
+| `/` | **今日待办**：顶部四卡可滚动定位；①今日截止 ②其余待激活 ③过期待补录 ④本月已完成 |
+| `/orders` | **全部业务**；待激活：未跟进优先排序，可筛跟进状态 / 今日截止 |
+| `/orders/new` | 新建业务；经理选开单人（本人/队员）；`?linkedVoidOrderId=` 重办并预填 |
 | `/orders/[id]` | 详情：激活 / 补录 / 退单 / 跟进 / 重办；`HistoryBackLink` + 滚动记忆 |
-| `/performance` | **业绩复盘**：汇总、补录质量、经理排行（ADMIN）、人员明细排名 |
+| `/performance` | **业绩复盘**：汇总、补录质量、本月经理排行榜（ADMIN）、本月队员排行榜 |
 | `/performance/staff/[id]` | 队员下钻（点排名姓名）：个人指标 + 业务明细（可按状态筛） |
 | `/performance/orders` | 复盘下钻列表（补录质量「已完成 / 仍过期」）；带「← 业绩复盘」，**勿**链到 `/orders` |
-| `/admin/import` | **导入对账**（仅 ADMIN） |
+| `/admin/import` | **导入对账**（仅 ADMIN）；Tab：人员/业绩上传（沙箱可直接传 Excel）+ 本地 data |
 | `/follow-up` | 重定向到 `/`（兼容旧链） |
 
-侧栏：今日待办 · 全部业务 · 新建业务 · 业绩复盘（含 `/performance/*`）· 导入对账（ADMIN）· 修改密码。
+侧栏：今日待办 · 全部业务 · 业绩复盘（含 `/performance/*`）· 导入对账（ADMIN）· 修改密码。
 
 ### 7.1 业绩复盘交互约定
 
 | 点 | 约定 |
 |---|---|
+| 月份 | 页头 `?month=YYYY-MM`（默认当月）；汇总卡、经理/队员榜、下钻列表均按**办理日**过滤 |
 | 人员排名 | `getStaffRanking`：按开单人已完成优先，再按总量；范围随角色 |
 | 「所属经理」列 | **仅 ADMIN** 全员榜显示；经理/队员视角本队已锁定，不显示 |
 | 点队员名 | → `/performance/staff/[id]`（越权 `notFound`） |
@@ -350,10 +374,10 @@ unicom/
 | 总办理 / 待激活 / 已完成 / 已过期 / 已退单 | 可见范围内按 `status` | 业绩复盘、队员下钻 |
 | 完成率 / 过期率 | 已完成÷总量、已过期÷总量 | 业绩复盘 |
 | 过期后补录完成 | `COMPLETED && wasEverExpired` | 补录质量卡、排名「过期补录」列 |
-| 经理排行 | 按开单人所属经理汇总 | 业绩复盘（仅 ADMIN） |
-| 人员明细排名 | 开单人维度；完成优先再总量 | 业绩复盘 |
+| 本月经理排行榜 | 本队开单人汇总 · **办理日落所选月**（`?month=YYYY-MM`）；已完成优先排序 | 业绩复盘（仅 ADMIN） |
+| 本月队员排行榜 | 开单人维度 · **办理日落所选月**；完成优先再总量 | 业绩复盘 |
 | 今日截止 | 待激活且 `daysUntilExpire <= 0` | 今日待办 |
-| 今日新开 | `handleDate = 今天` | 今日待办 |
+| 本月已完成 | `COMPLETED` 且激活日（无则办理日）落在当月 | 今日待办 ④ |
 
 ---
 
@@ -398,11 +422,14 @@ unicom/
 
 | 问题 | 先看 |
 |---|---|
-| 登录 / Session | `auth.ts`, `auth.config.ts`, `middleware.ts` |
+| 登录 / Session | `auth.ts`, `auth.config.ts`, `middleware.ts`, `LoginForm.tsx` |
+| 经理开单 / 重办 | `NewOrderForm.tsx`, `scope.ts`（`getCreateOpenerOptions`）, `orders.ts`（`createOrder`） |
+| 激活人下拉 | `scope.ts`（`getActivatorOptions`）, `orders/[id]/page.tsx` |
 | 过期对不对 | `order-rules.ts`, `date-utils.ts`, seed 年份 |
 | Excel 补完成 | `orders-importer.ts` §8.4 |
 | 权限越权 | `scope.ts`, `permissions.ts` |
 | 导入失败 | `personnel-importer.ts`, `orders-importer.ts`, `/admin/import` |
+| 用户看到技术报错 | `src/lib/api-error.ts`（`toUserError` 过滤 Prisma/堆栈；业务 Error 原样返回） |
 | 返回错页 / 滚丢 | `HistoryBackLink.tsx`, `mainScroll.ts`, `ScrollMemory.tsx` |
 | 人员排名 / 下钻 | `scope.ts`（`getStaffRanking` / `getStaffPerformance`）、`performance/*` |
 | 待办卡片不跳 | `QueueStatCard.tsx`、首页 `#queue-*` id |

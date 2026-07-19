@@ -12,12 +12,17 @@ import { getSessionUser } from "@/lib/session";
 import { PermissionError } from "@/lib/permissions";
 import { getStaffPerformance } from "@/services/scope";
 import {
-  STATUS_LABELS,
   CARRIER_LABELS,
-  statusTone,
   daysUntilExpire,
+  shouldShowPendingExpiredDual,
 } from "@/lib/order-rules";
 import { formatHandleDate } from "@/lib/date-utils";
+import { OrderStatusBadges } from "@/components/orders/OrderStatusBadges";
+import {
+  formatPerformanceMonthParam,
+  parsePerformanceMonth,
+  performanceMonthTitle,
+} from "@/lib/performance-month";
 import type { OrderStatus } from "@/generated/prisma/client";
 
 export default async function StaffPerformancePage({
@@ -25,16 +30,19 @@ export default async function StaffPerformancePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; month?: string }>;
 }) {
   const user = await getSessionUser();
   const { id } = await params;
-  const { status } = await searchParams;
+  const { status, month: monthRaw } = await searchParams;
   const statusFilter = status as OrderStatus | undefined;
+  const month = parsePerformanceMonth(monthRaw);
+  const monthParam = formatPerformanceMonthParam(month);
+  const monthTitle = performanceMonthTitle(month);
 
   let detail;
   try {
-    detail = await getStaffPerformance(user!, id);
+    detail = await getStaffPerformance(user!, id, month);
   } catch (e) {
     if (e instanceof PermissionError) notFound();
     throw e;
@@ -45,12 +53,21 @@ export default async function StaffPerformancePage({
     ? orders.filter((o) => o.status === statusFilter)
     : orders;
 
+  function filterHref(value: string) {
+    const q = new URLSearchParams({ month: monthParam });
+    if (value) q.set("status", value);
+    return `/performance/staff/${staff.id}?${q.toString()}`;
+  }
+
   return (
     <PageShell>
-      <HistoryBackLink label="← 业绩复盘" fallbackHref="/performance" />
+      <HistoryBackLink
+        label="← 业绩复盘"
+        fallbackHref={`/performance?month=${monthParam}`}
+      />
       <PageHeader
         title={staff.name}
-        meta={`开单人明细 · 所属经理 ${staff.managerName} · 共 ${stats.total} 单`}
+        meta={`${monthTitle} · 开单人明细 · 所属经理 ${staff.managerName} · 共 ${stats.total} 单`}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -77,11 +94,7 @@ export default async function StaffPerformancePage({
             ).map(([value, label]) => (
               <Link
                 key={value || "all"}
-                href={
-                  value
-                    ? `/performance/staff/${staff.id}?status=${value}`
-                    : `/performance/staff/${staff.id}`
-                }
+                href={filterHref(value)}
                 className={`px-3 py-1.5 rounded-lg text-sm border ${
                   (statusFilter ?? "") === value
                     ? "bg-[#eff6ff] border-[#bfdbfe] text-[#2563eb]"
@@ -118,12 +131,9 @@ export default async function StaffPerformancePage({
                     {o.planType}/{o.rechargeAmount}
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded border text-xs ${statusTone(o.status)}`}
-                    >
-                      {STATUS_LABELS[o.status]}
-                    </span>
-                    {o.status === "PENDING" && (
+                    <OrderStatusBadges status={o.status} handleDate={o.handleDate} />
+                    {o.status === "PENDING" &&
+                      !shouldShowPendingExpiredDual(o.status, o.handleDate) && (
                       <span className="block text-xs text-[#94a3b8] mt-1">
                         剩余 {Math.max(0, daysUntilExpire(o.handleDate))} 天
                       </span>
@@ -145,7 +155,7 @@ export default async function StaffPerformancePage({
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-[#94a3b8]">
-                    暂无业务单
+                    该月暂无业务单
                   </td>
                 </tr>
               )}

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { errorResponse } from "@/lib/api-error";
 
 const schema = z.object({
   currentPassword: z.string().optional(),
@@ -60,6 +61,6 @@ export async function POST(req: Request) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.issues[0]?.message }, { status: 400 });
     }
-    return NextResponse.json({ error: "修改失败" }, { status: 500 });
+    return errorResponse(err, 500, { fallback: "修改失败" });
   }
 }

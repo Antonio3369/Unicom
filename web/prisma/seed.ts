@@ -8,10 +8,10 @@ import { importOrdersFile, runExpirationBatch } from "../src/services/import/ord
 async function main() {
   const personnelFile =
     process.env.PERSONNEL_FILE ??
-    path.join(__dirname, "../../data/罗湖联通业务员名单.xlsx");
+    path.join(__dirname, "../data/罗湖联通业务员名单.xlsx");
   const ordersFile =
     process.env.ORDERS_FILE ??
-    path.join(__dirname, "../../data/业绩登记模版-上传数据系统.xlsx");
+    path.join(__dirname, "../data/业绩登记模版-上传数据系统.xlsx");
 
   const adminHash = await bcrypt.hash("123456", 10);
   await db.user.upsert({

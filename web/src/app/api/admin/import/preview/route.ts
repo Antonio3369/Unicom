@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { canImportExcel } from "@/lib/permissions";
-import { importPersonnelFile } from "@/services/import/personnel-importer";
-import { importOrdersFile, runExpirationBatch } from "@/services/import/orders-importer";
+import { previewPersonnelFile } from "@/services/import/personnel-importer";
+import { previewOrdersFile } from "@/services/import/orders-importer";
 import path from "path";
 import { writeFile, mkdir, access } from "fs/promises";
 import { errorResponse } from "@/lib/api-error";
@@ -23,23 +23,22 @@ export async function POST(req: Request) {
 
   const uploadDir = path.join(process.cwd(), "uploads");
   await mkdir(uploadDir, { recursive: true });
-  const filePath = path.join(uploadDir, `${Date.now()}_${file.name}`);
+  const filePath = path.join(uploadDir, `${Date.now()}_preview_${file.name}`);
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(filePath, buffer);
 
   try {
     if (type === "personnel") {
-      const result = await importPersonnelFile(filePath, "罗湖");
-      return NextResponse.json({ ok: true, result });
+      const result = await previewPersonnelFile(filePath, "罗湖");
+      return NextResponse.json({ ok: true, preview: true, type, result });
     }
     if (type === "orders") {
-      const result = await importOrdersFile(filePath);
-      const batchExpired = await runExpirationBatch();
-      return NextResponse.json({ ok: true, result, batchExpired });
+      const result = await previewOrdersFile(filePath);
+      return NextResponse.json({ ok: true, preview: true, type, result });
     }
     return NextResponse.json({ error: "未知导入类型" }, { status: 400 });
   } catch (e) {
-    return errorResponse(e, 500, { fallback: "导入失败，请稍后重试" });
+    return errorResponse(e, 500, { fallback: "预览失败，请确认 Excel 格式正确" });
   }
 }
 
@@ -61,10 +60,15 @@ export async function PUT() {
   try {
     await access(personnelFile);
     await access(ordersFile);
-    const personnel = await importPersonnelFile(personnelFile, "罗湖");
-    const orders = await importOrdersFile(ordersFile);
-    const expired = await runExpirationBatch();
-    return NextResponse.json({ ok: true, personnel, orders, expired });
+    const personnel = await previewPersonnelFile(personnelFile, "罗湖");
+    const orders = await previewOrdersFile(ordersFile);
+    return NextResponse.json({
+      ok: true,
+      preview: true,
+      type: "seed",
+      personnel,
+      orders,
+    });
   } catch (e) {
     const err = e as NodeJS.ErrnoException;
     if (err.code === "ENOENT") {
@@ -75,6 +79,6 @@ export async function PUT() {
         { status: 500 }
       );
     }
-    return errorResponse(e, 500, { fallback: "导入失败，请稍后重试" });
+    return errorResponse(e, 500, { fallback: "预览失败，请确认 Excel 格式正确" });
   }
 }

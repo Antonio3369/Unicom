@@ -19,6 +19,17 @@ export function daysUntilExpire(handleDate: Date, refDate: Date = new Date()): n
   return diff;
 }
 
+/** 列表/详情双标签：未曾激活且已超办理窗口（含系统 EXPIRED） */
+export function shouldShowPendingExpiredDual(
+  status: OrderStatus,
+  handleDate: Date,
+  refDate: Date = new Date()
+): boolean {
+  if (status === "EXPIRED") return true;
+  if (status === "PENDING" && daysUntilExpire(handleDate, refDate) <= 0) return true;
+  return false;
+}
+
 export function resolveImportStatus(
   rawStatus: string,
   handleDate: Date,
@@ -60,4 +71,33 @@ export function statusTone(status: OrderStatus): string {
     default:
       return "bg-slate-50 text-slate-700 border-slate-200";
   }
+}
+
+export type FollowUpFields = {
+  followUpAt?: Date | null;
+  pendingReason?: string | null;
+  planActivateAt?: Date | null;
+};
+
+export function hasFollowUp(order: FollowUpFields): boolean {
+  return !!(
+    order.followUpAt ||
+    order.pendingReason?.trim() ||
+    order.planActivateAt
+  );
+}
+
+type PendingSortable = FollowUpFields & { handleDate: Date; daysLeft?: number };
+
+/** 待激活队列：未跟进优先，再按剩余天数、办理日 */
+export function comparePendingOrders(a: PendingSortable, b: PendingSortable): number {
+  const aFollowed = hasFollowUp(a) ? 1 : 0;
+  const bFollowed = hasFollowUp(b) ? 1 : 0;
+  if (aFollowed !== bFollowed) return aFollowed - bFollowed;
+
+  const daysA = a.daysLeft ?? daysUntilExpire(a.handleDate);
+  const daysB = b.daysLeft ?? daysUntilExpire(b.handleDate);
+  if (daysA !== daysB) return daysA - daysB;
+
+  return a.handleDate.getTime() - b.handleDate.getTime();
 }

@@ -48,3 +48,11 @@ export function toDateInputValue(date: Date): string {
 export function parseDateInput(value: string): Date {
   return startOfDay(new Date(`${value}T00:00:00`));
 }
+
+export function formatFollowUpAt(date: Date): string {
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${m}/${d} ${hh}:${mm}`;
+}

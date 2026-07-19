@@ -14,7 +14,6 @@ function buildNav(role: SessionUser["role"]): NavItem[] {
   const items: NavItem[] = [
     { href: "/", label: "今日待办", match: "exact" },
     { href: "/orders", label: "全部业务", match: "prefix" },
-    { href: "/orders/new", label: "新建业务", match: "exact" },
     { href: "/performance", label: "业绩复盘", match: "prefix" },
   ];
   if (role === "ADMIN") {
@@ -37,6 +36,15 @@ function isActive(pathname: string, item: NavItem) {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
+function roleLabel(role: SessionUser["role"]) {
+  return role === "ADMIN" ? "管理员" : role === "MANAGER" ? "经理" : "队员";
+}
+
+function userCaption(user: SessionUser) {
+  const role = roleLabel(user.role);
+  return user.name === role ? user.name : `${user.name} · ${role}`;
+}
+
 export function AppShell({
   user,
   children,
@@ -56,10 +64,7 @@ export function AppShell({
         <div className="mb-8">
           <p className="text-xs font-semibold text-[#94a3b8] uppercase">联通业务</p>
           <p className="font-bold text-[#111827]">运营工作台</p>
-          <p className="text-xs text-[#64748b] mt-1">
-            {user.name} ·{" "}
-            {user.role === "ADMIN" ? "管理员" : user.role === "MANAGER" ? "经理" : "队员"}
-          </p>
+          <p className="text-xs text-[#64748b] mt-1">{userCaption(user)}</p>
         </div>
         <nav className="space-y-1 flex-1">
           {nav.map((item) => {
@@ -86,32 +91,36 @@ export function AppShell({
       </aside>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        <div className="md:hidden shrink-0 border-b border-[#eef2f7] bg-white px-3 py-2 overflow-x-auto">
-          <div className="flex gap-2 min-w-max">
-            {nav
-              .filter((i) => i.href !== "/settings/password")
-              .map((item) => {
-                const active = isActive(pathname, item);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => markSidebarNavTop()}
-                    className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap ${
-                      active
-                        ? "bg-[#eff6ff] text-[#2563eb] font-medium"
-                        : "text-[#64748b] bg-[#f8fafc]"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
+        <div className="md:hidden shrink-0 border-b border-[#eef2f7] bg-white px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0 overflow-x-auto overscroll-x-contain">
+              <div className="flex gap-2 min-w-max pb-0.5">
+                {nav.map((item) => {
+                  const active = isActive(pathname, item);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => markSidebarNavTop()}
+                      className={`px-3 py-2 rounded-lg text-xs whitespace-nowrap min-h-[36px] inline-flex items-center ${
+                        active
+                          ? "bg-[#eff6ff] text-[#2563eb] font-medium"
+                          : "text-[#64748b] bg-[#f8fafc]"
+                      }`}
+                    >
+                      {item.href === "/settings/password" ? "改密" : item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+            <SignOutButton compact />
           </div>
+          <p className="text-[10px] text-[#94a3b8] mt-1.5 truncate">{userCaption(user)}</p>
         </div>
         <main
           id="app-scroll"
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-8"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-8 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="max-w-7xl w-full">{children}</div>
         </main>

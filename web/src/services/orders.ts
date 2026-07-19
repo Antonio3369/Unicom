@@ -3,9 +3,11 @@ import type { Carrier, OrderStatus } from "@/generated/prisma/client";
 import type { SessionUser } from "@/lib/permissions";
 import { PermissionError, assertUserInScope } from "@/lib/permissions";
 import { buildOrderWhere, getAccessibleUserIds } from "@/services/scope";
-import { EXPIRED_REASON, daysUntilExpire } from "@/lib/order-rules";
+import { EXPIRED_REASON, daysUntilExpire, hasFollowUp, comparePendingOrders } from "@/lib/order-rules";
 import { parseDateInput } from "@/lib/date-utils";
-import { startOfDay } from "date-fns";
+import { startOfDay, startOfMonth, endOfMonth } from "date-fns";
+import type { Prisma } from "@/generated/prisma/client";
+import { performanceMonthRange } from "@/lib/performance-month";
 
 export async function getOrderForUser(orderId: string, user: SessionUser) {
   const order = await db.order.findUnique({
@@ -87,11 +89,18 @@ export async function updatePendingInfo(input: {
 }) {
   const order = await getOrderForUser(input.orderId, input.user);
   if (order.status !== "PENDING") throw new Error("仅待激活可更新跟进信息");
+
+  const planActivateAt = input.planActivateAt?.trim()
+    ? parseDateInput(input.planActivateAt.trim())
+    : null;
+  const pendingReason = input.pendingReason?.trim() || null;
+
   return db.order.update({
     where: { id: order.id },
     data: {
-      planActivateAt: input.planActivateAt ? parseDateInput(input.planActivateAt) : undefined,
-      pendingReason: input.pendingReason,
+      planActivateAt,
+      pendingReason,
+      followUpAt: new Date(),
     },
   });
 }
@@ -114,14 +123,34 @@ export async function createOrder(input: {
   }
   assertUserInScope(input.user, input.openerId, ids);
 
+  if (input.linkedVoidOrderId) {
+    const voidOrder = await getOrderForUser(input.linkedVoidOrderId, input.user);
+    if (voidOrder.status !== "EXPIRED") {
+      throw new Error("仅已过期单可关联重新办理");
+    }
+  }
+
   const opener = await db.user.findUnique({ where: { id: input.openerId } });
-  if (!opener?.managerId) throw new Error("开单人无效");
+  if (!opener || opener.status !== "ACTIVE") {
+    throw new Error("开单人无效");
+  }
+  let managerId: string;
+  if (opener.role === "MANAGER") {
+    if (input.user.role !== "MANAGER" || opener.id !== input.user.id) {
+      throw new PermissionError("无权指定该开单人");
+    }
+    managerId = opener.id;
+  } else if (opener.role === "SALES" && opener.managerId) {
+    managerId = opener.managerId;
+  } else {
+    throw new Error("开单人无效");
+  }
 
   return db.order.create({
     data: {
       handleDate: parseDateInput(input.handleDate),
       openerId: opener.id,
-      managerId: opener.managerId,
+      managerId,
       customerSurname: input.customerSurname.slice(0, 1),
       phone: input.phone,
       planType: input.planType,
@@ -134,12 +163,29 @@ export async function createOrder(input: {
   });
 }
 
-export async function listOrders(user: SessionUser, status?: OrderStatus) {
+export type ListOrdersFilter = {
+  status?: OrderStatus;
+  followUp?: "none" | "done";
+  dueToday?: boolean;
+  month?: Date;
+};
+
+export async function listOrders(
+  user: SessionUser,
+  filter?: OrderStatus | ListOrdersFilter
+) {
+  const options: ListOrdersFilter =
+    typeof filter === "string" || filter === undefined ? { status: filter } : filter;
+
+  const extraParts: Prisma.OrderWhereInput[] = [];
+  if (options.status) extraParts.push({ status: options.status });
+  if (options.month) extraParts.push({ handleDate: performanceMonthRange(options.month) });
+
   const where = await buildOrderWhere(
     user,
-    status ? { status } : undefined
+    extraParts.length ? (extraParts.length === 1 ? extraParts[0] : { AND: extraParts }) : undefined
   );
-  return db.order.findMany({
+  let orders = await db.order.findMany({
     where,
     include: {
       opener: { select: { name: true } },
@@ -148,6 +194,20 @@ export async function listOrders(user: SessionUser, status?: OrderStatus) {
     orderBy: [{ handleDate: "desc" }, { createdAt: "desc" }],
     take: 500,
   });
+
+  if (options.status === "PENDING") {
+    if (options.followUp === "none") {
+      orders = orders.filter((o) => !hasFollowUp(o));
+    } else if (options.followUp === "done") {
+      orders = orders.filter((o) => hasFollowUp(o));
+    }
+    if (options.dueToday) {
+      orders = orders.filter((o) => daysUntilExpire(o.handleDate) <= 0);
+    }
+    orders.sort((a, b) => comparePendingOrders(a, b));
+  }
+
+  return orders;
 }
 
 const orderListInclude = {
@@ -155,8 +215,11 @@ const orderListInclude = {
   activator: { select: { name: true } },
 } as const;
 
-export async function getDashboardStats(user: SessionUser) {
-  const where = await buildOrderWhere(user);
+export async function getDashboardStats(user: SessionUser, monthRef?: Date) {
+  const extra: Prisma.OrderWhereInput | undefined = monthRef
+    ? { handleDate: performanceMonthRange(monthRef) }
+    : undefined;
+  const where = await buildOrderWhere(user, extra);
   const orders = await db.order.findMany({ where });
   const pending = orders.filter((o) => o.status === "PENDING");
   const expiringSoon = pending.filter((o) => daysUntilExpire(o.handleDate) <= 0);
@@ -190,30 +253,40 @@ export async function getWorkQueues(user: SessionUser) {
 
   const expiringToday = withDays
     .filter((o) => o.daysLeft <= 0)
-    .sort((a, b) => a.daysLeft - b.daysLeft);
+    .sort(comparePendingOrders);
 
   const pendingRest = withDays
     .filter((o) => o.daysLeft > 0)
-    .sort((a, b) => a.daysLeft - b.daysLeft);
+    .sort(comparePendingOrders);
 
   const expiredOpen = orders
     .filter((o) => o.status === "EXPIRED")
     .sort((a, b) => b.handleDate.getTime() - a.handleDate.getTime());
 
-  const todayOpened = orders.filter(
-    (o) => startOfDay(o.handleDate).getTime() === today.getTime()
-  );
+  const monthStart = startOfMonth(today);
+  const monthEnd = endOfMonth(today);
+  const monthCompleted = orders
+    .filter((o) => {
+      if (o.status !== "COMPLETED") return false;
+      const ref = startOfDay(o.activatedAt ?? o.handleDate);
+      return ref >= monthStart && ref <= monthEnd;
+    })
+    .sort(
+      (a, b) =>
+        (b.activatedAt ?? b.handleDate).getTime() -
+        (a.activatedAt ?? a.handleDate).getTime()
+    );
 
   return {
     expiringToday,
     pendingRest,
     expiredOpen,
-    todayOpened,
+    monthCompleted,
     counts: {
       expiringToday: expiringToday.length,
       pending: pending.length,
       expiredOpen: expiredOpen.length,
-      todayOpened: todayOpened.length,
+      monthCompleted: monthCompleted.length,
       lateCompleted: orders.filter((o) => o.status === "COMPLETED" && o.wasEverExpired)
         .length,
     },

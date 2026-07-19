@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import type { UserRole } from "@/generated/prisma/client";
 import { allocatePinyinUsername } from "@/lib/username";
+import { readExcelWorkbook } from "@/services/import/helpers";
 
 export interface PersonnelImportResult {
   managersCreated: number;
@@ -16,7 +17,7 @@ export async function importPersonnelFile(
   filePath: string,
   region = "罗湖"
 ): Promise<PersonnelImportResult> {
-  const wb = XLSX.readFile(filePath);
+  const wb = await readExcelWorkbook(filePath);
   const sheet = wb.Sheets[wb.SheetNames[0]!]!;
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
 
@@ -90,5 +91,45 @@ export async function importPersonnelFile(
     }
   }
 
+  return { managersCreated, salesCreated, salesUpdated };
+}
+
+/** 只统计，不写入数据库 */
+export async function previewPersonnelFile(
+  filePath: string,
+  region = "罗湖"
+): Promise<PersonnelImportResult> {
+  const wb = await readExcelWorkbook(filePath);
+  const sheet = wb.Sheets[wb.SheetNames[0]!]!;
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+  let managersCreated = 0;
+  let salesCreated = 0;
+  let salesUpdated = 0;
+  const managerSeen = new Set<string>();
+
+  for (const row of rows) {
+    const salesName = String(row["业务员"] ?? row[Object.keys(row)[0]!] ?? "").trim();
+    const managerName = String(row["所属经理"] ?? row[Object.keys(row)[1]!] ?? "").trim();
+    if (!salesName || salesName === "业务员" || !managerName || managerName === "所属经理") {
+      continue;
+    }
+
+    if (!managerSeen.has(managerName)) {
+      managerSeen.add(managerName);
+      const existingManager = await db.user.findFirst({
+        where: { name: managerName, role: "MANAGER" },
+      });
+      if (!existingManager) managersCreated++;
+    }
+
+    const existingSales = await db.user.findFirst({
+      where: { name: salesName, role: "SALES" },
+    });
+    if (existingSales) salesUpdated++;
+    else salesCreated++;
+  }
+
+  void region;
   return { managersCreated, salesCreated, salesUpdated };
 }

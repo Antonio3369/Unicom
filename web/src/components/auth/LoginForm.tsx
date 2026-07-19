@@ -1,69 +1,122 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { NotionButton, NotionPanel, PageHeader, PageShell, notion } from "@/components/ui/notion";
+import { useSearchParams } from "next/navigation";
+import { NotionButton, NotionPanel, notion, NotionAlert } from "@/components/ui/notion";
 import { NotionPasswordInput } from "@/components/ui/NotionPasswordInput";
 
-export function LoginForm() {
-  const router = useRouter();
+function loginErrorMessage(code: string | null): string {
+  switch (code) {
+    case "CredentialsSignin":
+      return "登录名或密码错误";
+    case "Configuration":
+      return "登录服务配置异常，请重启开发服务后重试";
+    default:
+      return code ? "登录失败，请重试" : "";
+  }
+}
+
+function LoginFormInner() {
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const msg = loginErrorMessage(searchParams.get("error"));
+    if (msg) setError(msg);
+  }, [searchParams]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const res = await signIn("credentials", {
-      username,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (res?.error) {
-      setError("登录名或密码错误");
+
+    const name = username.trim();
+    if (!name || !password) {
+      setError("请输入登录名和密码");
+      setLoading(false);
       return;
     }
-    router.push("/");
-    router.refresh();
+
+    try {
+      const res = await signIn("credentials", {
+        username: name,
+        password,
+        redirect: false,
+        callbackUrl: "/",
+      });
+
+      if (!res?.ok) {
+        setError(loginErrorMessage(res?.error ?? "CredentialsSignin") || "登录失败，请重试");
+        setLoading(false);
+        return;
+      }
+
+      // 勿用 res.url：dev 下常为 http://localhost:1771，手机局域网访问会跳错主机
+      window.location.assign("/");
+    } catch {
+      setError("网络异常，请确认 WiFi 与开发服务正常");
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f6f9] flex items-center justify-center p-4">
-      <PageShell>
-        <div className="max-w-md mx-auto w-full">
-          <PageHeader title="登录" meta="联通业务工作台 · 罗湖试点" />
-          <NotionPanel className="mt-6">
-            <form onSubmit={onSubmit} className="space-y-4">
-              <label className="block space-y-1">
-                <span className="text-sm text-[#64748b]">登录名</span>
-                <input
-                  className={notion.input}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin / linhao / zhoujie"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-sm text-[#64748b]">密码</span>
-                <NotionPasswordInput
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
-              </label>
-              {error && <p className="text-sm text-rose-600">{error}</p>}
-              <NotionButton type="submit" disabled={loading} className="w-full">
-                {loading ? "登录中…" : "登录"}
-              </NotionButton>
-              <p className="text-xs text-[#94a3b8]">开发默认密码：123456</p>
-            </form>
-          </NotionPanel>
+    <div className="min-h-[100dvh] bg-[#f4f6f9] flex items-center justify-center px-4 py-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="max-w-md mx-auto w-full">
+        <div className="mb-6 text-center sm:text-left">
+          <p className="text-xs font-semibold tracking-wide uppercase text-[#94a3b8]">
+            联通业务工作台
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#111827] tracking-tight mt-1">
+            登录
+          </h1>
         </div>
-      </PageShell>
+        <NotionPanel>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <label className="block space-y-1">
+              <span className="text-sm text-[#64748b]">登录名</span>
+              <input
+                className={notion.input}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="admin / linhao / zhoujie"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="next"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-sm text-[#64748b]">密码</span>
+              <NotionPasswordInput
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                enterKeyHint="go"
+              />
+            </label>
+            {error && <NotionAlert tone="error">{error}</NotionAlert>}
+            <NotionButton type="submit" disabled={loading} className="w-full">
+              {loading ? "登录中…" : "登录"}
+            </NotionButton>
+            <p className="text-xs text-[#94a3b8] text-center sm:text-left">
+              开发默认密码：123456
+            </p>
+          </form>
+        </NotionPanel>
+      </div>
     </div>
+  );
+}
+
+export function LoginForm() {
+  return (
+    <Suspense fallback={null}>
+      <LoginFormInner />
+    </Suspense>
   );
 }
