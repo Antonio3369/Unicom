@@ -1,0 +1,27 @@
+.DS_Store
+
+# Local Excel / operational data (含真实业务员信息，不入库)
+/data/*.xlsx
+/data/*.xls
+/data/*.csv
+
+# Nested app ignores also applied from web/.gitignore
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/coverage/
+web/.vercel/
+web/*.pem
+web/.env
+web/.env.*
+!web/.env.example
+web/*.db
+web/dev.db
+web/*.tsbuildinfo
+web/next-env.d.ts
+web/src/generated/prisma/
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/.pnpm-debug.log*

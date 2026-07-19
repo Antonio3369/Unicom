@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SALES
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  EXPIRED
+}
+
+enum Carrier {
+  UNICOM
+  MOBILE
+  OTHER
+}
+
+enum ImportStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum AnomalyType {
+  INVALID_STATUS
+  MISSING_FIELDS
+  UNKNOWN_OPENER
+  MANAGER_MISMATCH
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  username           String     @unique
+  passwordHash       String?
+  name               String
+  role               UserRole
+  status             UserStatus @default(ACTIVE)
+  region             String?
+  mustChangePassword Boolean    @default(false)
+  managerId          String?
+  manager            User?      @relation("UserHierarchy", fields: [managerId], references: [id])
+  subordinates       User[]     @relation("UserHierarchy")
+  openedOrders       Order[]    @relation("OrderOpener")
+  activatedOrders    Order[]    @relation("OrderActivator")
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([role])
+  @@index([managerId])
+}
+
+model BackendDict {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  region    String?
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id                  String      @id @default(cuid())
+  handleDate          DateTime
+  openerId            String
+  opener              User        @relation("OrderOpener", fields: [openerId], references: [id])
+  managerId           String
+  customerSurname     String
+  phone               String
+  planType            String
+  rechargeAmount      Float
+  carrier             Carrier?
+  openBackend         String?
+  status              OrderStatus @default(PENDING)
+  planActivateAt      DateTime?
+  pendingReason       String?
+  note                String?
+  activatorId         String?
+  activator           User?       @relation("OrderActivator", fields: [activatorId], references: [id])
+  activateBackend     String?
+  activatedAt         DateTime?
+  refundReason        String?
+  refundNote          String?
+  wasEverExpired      Boolean     @default(false)
+  expiredAt           DateTime?
+  expiredReason       String?
+  lateEntryNote       String?
+  linkedVoidOrderId   String?
+  importKey           String?     @unique
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([status])
+  @@index([handleDate])
+  @@index([managerId])
+  @@index([openerId])
+  @@index([phone])
+}
+
+model ImportLog {
+  id          String       @id @default(cuid())
+  fileName    String
+  importType  String
+  status      ImportStatus
+  totalRows   Int
+  createdRows Int          @default(0)
+  updatedRows Int          @default(0)
+  skippedRows Int          @default(0)
+  anomalyRows Int          @default(0)
+  message     String?
+  createdAt   DateTime     @default(now())
+}
+
+model AnomalyRecord {
+  id         String      @id @default(cuid())
+  importType String
+  rowNumber  Int
+  rawData    String
+  reason     String
+  type       AnomalyType
+  createdAt  DateTime    @default(now())
+}
