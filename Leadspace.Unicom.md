@@ -4,7 +4,10 @@
 > 罗湖试点跑通后，再扩展其他地区经理团队。  
 > 本文档供下次开发前快速查阅。
 
-**最后更新**：2026-07-19（产品方向：订单运营台 / 今日待办优先，不再按 N7 考核看板组织）
+**最后更新**：2026-07-19（业绩复盘人员排名/下钻、今日待办卡片跳转、补录列表返回链路；代码已推 GitHub）
+
+**仓库**：[github.com/Antonio3369/Unicom](https://github.com/Antonio3369/Unicom)  
+**本地根目录**：`/Users/Eric/Desktop/agent/unicom`（应用在 `web/`，说明在本文档）
 
 ---
 
@@ -18,7 +21,7 @@
 | 用户 | 管理员、经理、队员（均可登录；队员可补录） |
 | 数据来源 | **现行：Excel 人工上传**（人员名单 + 业绩登记） |
 | 试点范围 | **罗湖** 名单与表格；组织按 **经理** 划分，不以公司为租户 |
-| 参考项目 | [Leadspace-Ali](../../../projects/Leadspace-Ali) 的 **N7** 板块（列表/跟进/导入），非小蓝环风控逻辑 |
+| 参考项目 | Leadspace-Ali 的 **N7** 工程能力（列表/导入/权限），非考核看板形态 |
 
 **约定**：层级固定为 **管理员 → 经理 → 队员**。罗湖只是部分经理的 `region` 标签，不是独立公司层。
 
@@ -26,20 +29,23 @@
 
 ## 2. 本阶段停在哪里（2026-07-19）
 
-### 已上线到本地
+### 已具备（本地 + GitHub main）
 
-- 路径：`/Users/Eric/Desktop/agent/unicom/web`
-- 开发端口：**http://localhost:1771**
-- Seed 可导入罗湖两份 Excel；看板 / 列表 / 待跟进 / 详情操作 / 导入页可用
+- 路径：`unicom/web`，开发端口 **http://localhost:1771**
+- 认证：角色登录、首登强制改密（静默 re-login）、密码显示切换
+- **今日待办**：四卡可点进对应队列；①今日截止 ②其余待激活 ③过期待补录 ④今日新开
+- **全部业务** / 新建 / 详情（激活、补录、退单、跟进、重办）；后台名可下拉+手输（`BackendDict`）
+- **业绩复盘**：汇总卡、补录质量、经理排行（ADMIN）、**人员明细排名**、队员下钻、补录列表下钻
+- **导入对账**（ADMIN）：人员 + 业绩 Excel；Seed 可导罗湖样例
+- 滚动：`#app-scroll` + `ScrollMemory` / `HistoryBackLink`（详情返回列表位置）
 
-### 今晚不做
+### 未做（下次优先看 §14）
 
-- 生产部署
-- 导出 Excel、消息提醒
-- 其它地区经理名单批量导入 UI 打磨
-- 沟通记录附件上传（退单字段有，附件流程未做细）
+- 生产部署、每日 10:00 过期 cron
+- 导出 Excel、退单附件、导入预览向导
+- 其它地区名单导入体验打磨
 
-下次接着做时优先看 §14。
+**注意**：`data/*.xlsx`、`.env`、`dev.db` **不入库**（见根目录 `.gitignore`）。
 
 ---
 
@@ -221,15 +227,27 @@ Web 是滞后录入工具，**已过期 ≠ 焊死**：
 |---|---|
 | `/login` | 登录 |
 | `/settings/password` | 改密 / 首登强制改密 |
-| `/` | **今日待办**：今日截止 → 其余待激活 → 过期待补录 |
+| `/` | **今日待办**：顶部四卡可滚动定位；①今日截止 ②其余待激活 ③过期待补录 ④今日新开 |
 | `/orders` | **全部业务**（检索筛选，非主工作面） |
 | `/orders/new` | 新建业务（`?linkedVoidOrderId=` 重办） |
-| `/orders/[id]` | 详情：激活 / 补录 / 退单 / 跟进 / 重办；返回用 `HistoryBackLink` + `#app-scroll` 滚动记忆 |
-| `/performance` | **业绩复盘**（完成率、过期率、经理排行） |
+| `/orders/[id]` | 详情：激活 / 补录 / 退单 / 跟进 / 重办；`HistoryBackLink` + 滚动记忆 |
+| `/performance` | **业绩复盘**：汇总、补录质量、经理排行（ADMIN）、人员明细排名 |
+| `/performance/staff/[id]` | 队员下钻（点排名姓名）：个人指标 + 业务明细（可按状态筛） |
+| `/performance/orders` | 复盘下钻列表（补录质量「已完成 / 仍过期」）；带「← 业绩复盘」，**勿**链到 `/orders` |
 | `/admin/import` | **导入对账**（仅 ADMIN） |
 | `/follow-up` | 重定向到 `/`（兼容旧链） |
 
-侧栏：今日待办 · 全部业务 · 新建业务 · 业绩复盘 · 导入对账（ADMIN）· 修改密码。
+侧栏：今日待办 · 全部业务 · 新建业务 · 业绩复盘（含 `/performance/*`）· 导入对账（ADMIN）· 修改密码。
+
+### 7.1 业绩复盘交互约定
+
+| 点 | 约定 |
+|---|---|
+| 人员排名 | `getStaffRanking`：按开单人已完成优先，再按总量；范围随角色 |
+| 「所属经理」列 | **仅 ADMIN** 全员榜显示；经理/队员视角本队已锁定，不显示 |
+| 点队员名 | → `/performance/staff/[id]`（越权 `notFound`） |
+| 补录质量入口 | → `/performance/orders?status=COMPLETED\|EXPIRED`，返回业绩复盘 |
+| 今日待办四卡 | `QueueStatCard` 在 `#app-scroll` 内 smooth 滚到对应 `id` 区块 |
 
 ---
 
@@ -293,43 +311,49 @@ Schema：`web/prisma/schema.prisma`
 ## 10. 关键文件索引
 
 ```
-web/src/
-├── app/
-│   ├── (dashboard)/          # 看板、列表、详情、导入
-│   ├── login/
-│   ├── settings/password/
-│   ├── api/orders/
-│   ├── api/admin/import/
-│   └── api/auth/
-├── components/ui/notion.tsx
-├── components/orders/OrderDetailActions.tsx
-├── lib/
-│   ├── auth.ts / auth.config.ts
-│   ├── order-rules.ts        # ★ 过期判定
-│   ├── date-utils.ts         # ★ 办理日解析（当前年）
-│   ├── permissions.ts
-│   └── db.ts                 # Prisma + better-sqlite3 adapter
-└── services/
-    ├── scope.ts
-    ├── orders.ts
-    └── import/
-        ├── personnel-importer.ts
-        └── orders-importer.ts  # ★ Excel 补完成规则
+unicom/
+├── Leadspace.Unicom.md       # ★ 本手册
+├── data/*.xlsx               # 本地样例，不入库
+└── web/
+    ├── README.md
+    ├── prisma/schema.prisma
+    └── src/
+        ├── app/(dashboard)/
+        │   ├── page.tsx                 # 今日待办
+        │   ├── orders/ …                # 全部业务 / 新建 / 详情
+        │   ├── performance/
+        │   │   ├── page.tsx             # 业绩复盘
+        │   │   ├── staff/[id]/page.tsx # 队员下钻
+        │   │   └── orders/page.tsx      # 复盘侧业务列表
+        │   └── admin/import/
+        ├── components/
+        │   ├── layout/AppShell.tsx · ScrollMemory.tsx
+        │   ├── orders/QueueTable.tsx · QueueStatCard.tsx · OrderDetailActions.tsx
+        │   └── ui/notion.tsx · HistoryBackLink.tsx · BackendComboInput.tsx
+        ├── lib/
+        │   ├── auth.ts / auth.config.ts / mainScroll.ts
+        │   ├── order-rules.ts           # ★ 过期判定
+        │   ├── date-utils.ts            # ★ 办理日解析（当前年）
+        │   └── permissions.ts · db.ts · username.ts
+        └── services/
+            ├── scope.ts                 # ★ 权限 + 经理排行 + 人员排名/下钻
+            ├── orders.ts                # 队列 getWorkQueues、CRUD
+            └── import/…
 ```
-
-数据：`unicom/data/*.xlsx`
 
 ---
 
-## 11. 看板口径
+## 11. 指标口径
 
-| 指标 | 口径 |
-|---|---|
-| 总办理 | 可见范围内全部单 |
-| 待激活 / 已完成 / 已过期 / 已退单 | 按 `status` |
-| 即将过期 | 待激活且临近办理日+2（实现可再打磨） |
-| 过期后补录完成 | `COMPLETED && wasEverExpired` |
-| 经理排行 | 按开单人所属经理汇总（仅 ADMIN 首页） |
+| 指标 | 口径 | 出现位置 |
+|---|---|---|
+| 总办理 / 待激活 / 已完成 / 已过期 / 已退单 | 可见范围内按 `status` | 业绩复盘、队员下钻 |
+| 完成率 / 过期率 | 已完成÷总量、已过期÷总量 | 业绩复盘 |
+| 过期后补录完成 | `COMPLETED && wasEverExpired` | 补录质量卡、排名「过期补录」列 |
+| 经理排行 | 按开单人所属经理汇总 | 业绩复盘（仅 ADMIN） |
+| 人员明细排名 | 开单人维度；完成优先再总量 | 业绩复盘 |
+| 今日截止 | 待激活且 `daysUntilExpire <= 0` | 今日待办 |
+| 今日新开 | `handleDate = 今天` | 今日待办 |
 
 ---
 
@@ -360,13 +384,13 @@ web/src/
 
 | 优先级 | 内容 |
 |---|---|
-| P1 | 生产部署（可参考 Ali `deploy/`；库可换 PostgreSQL） |
-| P1 | 每日 10:00 过期 cron |
-| P2 | 列表导出、看板套餐/运营商分布图 |
+| P1 | 生产部署（库可换 PostgreSQL） |
+| P1 | 每日 10:00 过期 cron（`npm run expire:run`） |
+| P2 | 列表导出 Excel |
 | P2 | 退单沟通记录附件上传 |
-| P2 | 侧栏当前页高亮；即将过期算法对齐 daysUntilExpire |
+| P2 | 导入预览页（写入前确认过期/补完成条数） |
 | P3 | 其它地区经理名单导入体验；同手机号历史提示 |
-| P3 | 导入预览页（写入前确认过期/补完成条数） |
+| P3 | 套餐/运营商分布图（recharts 已装未用） |
 
 ---
 
@@ -379,6 +403,22 @@ web/src/
 | Excel 补完成 | `orders-importer.ts` §8.4 |
 | 权限越权 | `scope.ts`, `permissions.ts` |
 | 导入失败 | `personnel-importer.ts`, `orders-importer.ts`, `/admin/import` |
+| 返回错页 / 滚丢 | `HistoryBackLink.tsx`, `mainScroll.ts`, `ScrollMemory.tsx` |
+| 人员排名 / 下钻 | `scope.ts`（`getStaffRanking` / `getStaffPerformance`）、`performance/*` |
+| 待办卡片不跳 | `QueueStatCard.tsx`、首页 `#queue-*` id |
+
+---
+
+## 16. Git / 推送说明
+
+```bash
+cd /Users/Eric/Desktop/agent/unicom
+git remote -v   # git@github.com:Antonio3369/Unicom.git
+git push
+```
+
+本机 SSH 使用 `~/.ssh/id_ed25519_air`（`~/.ssh/config` 中 `Host github.com`）。  
+勿提交：`web/.env`、`web/dev.db`、`data/*.xlsx`。
 
 ---
 

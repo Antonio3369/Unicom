@@ -2,7 +2,11 @@
 
 罗湖试点 · **订单运营台**：今日待办优先，业绩复盘二级，Excel 导入对账。
 
-**完整约定与规则**见上级目录 [Leadspace.Unicom.md](../Leadspace.Unicom.md)（**最后更新 2026-07-19**）。
+| | |
+|---|---|
+| 仓库 | [Antonio3369/Unicom](https://github.com/Antonio3369/Unicom) |
+| 完整约定 | 上级目录 [Leadspace.Unicom.md](../Leadspace.Unicom.md)（**最后更新 2026-07-19**） |
+| 本地 | `cd web && npm run dev` → http://localhost:1771 |
 
 ## 本地启动
 
@@ -11,7 +15,7 @@ cd web
 npm install
 cp .env.example .env
 npm run db:push
-npm run db:seed          # 导入 ../data/ 下罗湖 Excel
+npm run db:seed          # 导入 ../data/ 下罗湖 Excel（文件需自备，不入库）
 npm run dev              # http://localhost:1771
 ```
 
@@ -25,7 +29,19 @@ npm run dev              # http://localhost:1771
 
 经理、队员默认登录名 = **中文名拼音**，密码 `123456`。首登会要求改密。
 
-## 数据文件
+## 主要页面
+
+| 路径 | 说明 |
+|------|------|
+| `/` | 今日待办（四卡可点进队列） |
+| `/orders` | 全部业务 |
+| `/orders/new` · `/orders/[id]` | 新建 / 详情处理 |
+| `/performance` | 业绩复盘 + 人员排名 |
+| `/performance/staff/[id]` | 队员下钻 |
+| `/performance/orders` | 复盘侧已完成/过期列表（从补录质量进入） |
+| `/admin/import` | 导入对账（ADMIN） |
+
+## 数据文件（本地）
 
 ```
 ../data/
@@ -33,7 +49,7 @@ npm run dev              # http://localhost:1771
   业绩登记模版-上传数据系统.xlsx
 ```
 
-管理员可在 **数据导入** 页一键重新导入，或上传新 Excel。
+管理员可在 **导入对账** 页重新导入或上传新 Excel。样例表 **不进 Git**。
 
 ## 关键规则（摘要）
 
@@ -42,9 +58,10 @@ npm run dev              # http://localhost:1771
 - **过期后**可 Web 补录，或 Excel 改「已完成」再传升为完成
 - 办理日 Excel 无年 → 按**当前年**解析（勿写死 2025）
 - 组织：管理员 → 经理 → 队员（罗湖是经理 region，非公司租户）
+- 复盘补录入口走 `/performance/orders`，不要链到侧栏「全部业务」
 
 ## 技术栈
 
 Next.js 16 · Prisma 7 · SQLite · NextAuth · Tailwind  
 
-参考 Leadspace-Alipay **N7** 模块。
+工程上参考 Leadspace-Ali **N7**，产品形态是工作队列而非考核看板。
