@@ -48,7 +48,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = String(credentials?.password ?? "");
         if (!username || !password) return null;
 
-        const user = await db.user.findUnique({ where: { username } });
+        let user;
+        try {
+          user = await db.user.findUnique({ where: { username } });
+        } catch {
+          throw new Error("DatabaseUnavailable");
+        }
         if (!user || !user.passwordHash || user.status !== "ACTIVE") return null;
         if (!canRoleSignIn(user.role)) return null;
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
-import { activateOrder, getOrderForUser, refundOrder, updatePendingInfo } from "@/services/orders";
+import { getOrderForUser, updatePendingInfo } from "@/services/orders";
+import { updateOrderFields } from "@/services/order-edits";
+import type { Carrier } from "@/generated/prisma/client";
 import { errorResponse, toUserError } from "@/lib/api-error";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -25,26 +27,23 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const body = await req.json();
 
   try {
-    if (body.action === "activate") {
-      if (!String(body.activateBackend ?? "").trim()) {
-        return NextResponse.json({ error: "请填写激活后台" }, { status: 400 });
-      }
-      const order = await activateOrder({
+    if (body.action === "edit") {
+      const order = await updateOrderFields({
         orderId: id,
         user,
+        handleDate: body.handleDate,
+        customerSurname: body.customerSurname,
+        phone: body.phone,
+        planType: body.planType,
+        rechargeAmount:
+          body.rechargeAmount !== undefined ? Number(body.rechargeAmount) : undefined,
+        carrier: body.carrier as Carrier | undefined,
+        openBackend: body.openBackend,
+        note: body.note,
         activatorId: body.activatorId,
-        activateBackend: String(body.activateBackend),
+        activateBackend: body.activateBackend,
         activatedAt: body.activatedAt,
-        lateEntryNote: body.lateEntryNote,
-      });
-      return NextResponse.json({ order });
-    }
-    if (body.action === "refund") {
-      const order = await refundOrder({
-        orderId: id,
-        user,
-        refundReason: body.refundReason,
-        refundNote: body.refundNote,
+        editNote: body.editNote,
       });
       return NextResponse.json({ order });
     }

@@ -5,98 +5,54 @@
 | | |
 |---|---|
 | 仓库 | [Antonio3369/Unicom](https://github.com/Antonio3369/Unicom) |
-| 完整约定 | 上级目录 [Leadspace.Unicom.md](../Leadspace.Unicom.md) |
+| 完整约定 | [Leadspace.Unicom.md](../Leadspace.Unicom.md) |
 | **生产** | **https://uni.orblead.com** |
-| 本地 | `cd web && npm run dev` → 本机 http://localhost:1771；**手机**用终端里打印的 `http://192.168.x.x:1771`（同 WiFi，勿用 localhost） |
+| 本地 | `docker compose up -d` → `npm run dev` → http://localhost:1771 |
 
 ## 本地启动
 
-**一键（推荐）**：
-
 ```bash
 cd web
-npm run dev:setup    # install → generate → push →（有 data 则 seed）→ dev
+docker compose up -d   # PostgreSQL :5433（须 Docker Desktop Running）
+npm run dev:setup      # 或分步：install → db:push → db:seed → dev
 ```
 
-**分步**：
+改 `schema.prisma` 后须 `npm run db:generate` 并**重启** dev。
 
-```bash
-cd web
-npm install
-cp .env.example .env
-npm run db:generate
-npm run db:push
-npm run db:seed          # 需 web/data/*.xlsx；或管理员页上传
-npm run dev              # 本机 localhost:1771；终端会打印手机用的局域网地址
-```
-
-改 `schema.prisma` 后须 `npm run db:generate` 并**重启** dev（Prisma 客户端会缓存）。
-
-## 演示账号（密码均为 `123456`）
+## 演示账号（密码 `123456`）
 
 | 登录名 | 角色 |
 |--------|------|
-| `admin` | 管理员（可导入、看全量） |
-| `linhao` / `dengxiuyun` / `longmin` | 经理（姓名拼音） |
-| `zhoujie` 等 | 队员（姓名拼音；重名则 `xxx2`） |
-
-经理、队员默认登录名 = **中文名全拼**，密码 `123456`。首登会要求改密。
+| `admin` | 管理员（导入、全量；不做 Web 开单） |
+| 姓名拼音如 `linhao` | 经理 |
+| 姓名拼音如 `zhoujie` | 队员 |
 
 ## 主要页面
 
 | 路径 | 说明 |
 |------|------|
-| `/` | 今日待办（四卡可点进队列） |
-| `/orders` | 全部业务（待激活：未跟进优先排序 + 跟进筛选） |
-| `/orders/new` · `/orders/[id]` | 新建 / 详情（经理开单可选本人或队员；重办带 `linkedVoidOrderId`） |
-| `/performance` | 业绩复盘 + 人员排名 |
-| `/performance/staff/[id]` | 队员下钻 |
-| `/performance/orders` | 复盘侧已完成/过期列表（从补录质量进入） |
+| `/` | 今日待办 + **新建业务**按钮 |
+| `/orders/new` | 新建（开单人默认本人） |
+| `/orders/[id]` | 详情：修改 / **保存已激活** / 跟进 / 退单（卡片分区） |
+| `/performance` | 业绩复盘 + **导出 Excel** |
+| `/performance/staff/[id]` | 队员明细（可按状态筛）+ **导出 Excel** |
 | `/admin/import` | 导入对账（ADMIN） |
 
-## 数据文件（本地）
-
-```
-web/data/
-  罗湖联通业务员名单.xlsx
-  业绩登记模版-上传数据系统.xlsx
-```
-
-运营日常可在 **导入对账** 页直接上传 Excel，不必放 data 目录。`web/data/*.xlsx` **不进 Git**（见根目录 `.gitignore`）。
-
-**手机调试**：同 WiFi 用终端打印的 `http://192.168.x.x:1771`；勿在 `.env` 写死 `AUTH_URL=http://localhost:...`。
+侧栏：**新建业务**（经理/队员）、全部业务、业绩复盘、导入对账（ADMIN）。
 
 ## 关键规则（摘要）
 
-- **经理也跑业务**：Web 开单/重办可选本人或队员；详情激活人含本人（队员榜仍只统计 SALES）
-- **绩效** = 开单人（激活人另记）
-- **过期** = 办理日 +2，D+3 日 10:00 批处理；`npm run expire:run`
-- **过期后**可 Web 补录，或 Excel 改「已完成」再传升为完成
-- 办理日 Excel 无年 → 按**当前年**解析（勿写死 2025）
-- 组织：管理员 → 经理 → 队员（罗湖是经理 region，非公司租户）
-- 复盘补录入口走 `/performance/orders`，不要链到侧栏「全部业务」
+- **修改订单**：待激活/已过期/已完成可改（开单人不可改）；过期单 **原单补录**，不再「重新开单」
+- **保存已激活**：须 1–3 张激活凭证；**退单**：须 1–3 张沟通记录
+- **经理改队员单**：留修改记录；**导出**：业绩复盘页与队员下钻页，三角色各导各范围
+- **绩效** = 开单人；**过期** = 办理日 +2，D+3 10:00 批处理
+
+详见 [Leadspace.Unicom.md](../Leadspace.Unicom.md) §5–§7。
 
 ## 技术栈
 
-Next.js 16 · Prisma 7 · SQLite · NextAuth · Tailwind  
-
-工程上参考 Leadspace-Ali **N7**，产品形态是工作队列而非考核看板。
+Next.js 16 · Prisma 7 · **PostgreSQL**（本地 Docker 5433）· NextAuth · Tailwind
 
 ## 生产部署
 
-| 项 | 值 |
-|---|---|
-| 地址 | **https://uni.orblead.com** |
-| 服务器 | 腾讯云 `43.136.25.181`（SSH `sales-cloud`，与 ali / hk 共用） |
-| 远程目录 | `/opt/leadspace-unicom` |
-| 容器端口 | `127.0.0.1:3002` → Nginx |
-
-```bash
-cd web
-npm run build                              # 部署前必过
-./deploy/push-and-deploy.sh                # rsync + 远程 docker build
-ssh sales-cloud 'cd /opt/leadspace-unicom && ./deploy/setup-ssl.sh'   # 首次 DNS 生效后
-ssh sales-cloud 'cd /opt/leadspace-unicom && ./deploy/install-expire-cron.sh'
-```
-
-详见 [Leadspace.Unicom.md](../Leadspace.Unicom.md) §15。
+见 [Leadspace.Unicom.md](../Leadspace.Unicom.md) §15 · `web/deploy/`

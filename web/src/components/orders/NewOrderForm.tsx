@@ -26,15 +26,11 @@ export type NewOrderFormInitial = {
 type OpenerOption = { id: string; name: string };
 
 export function NewOrderForm({
-  linkedVoidOrderId,
   openerOptions,
   defaultOpenerId,
-  initialForm,
 }: {
-  linkedVoidOrderId?: string;
   openerOptions: OpenerOption[] | null;
   defaultOpenerId?: string;
-  initialForm?: Partial<NewOrderFormInitial>;
 }) {
   const router = useRouter();
   const needsOpener = openerOptions !== null;
@@ -51,7 +47,6 @@ export function NewOrderForm({
     rechargeAmount: "200",
     carrier: "UNICOM",
     openBackend: "",
-    ...initialForm,
   });
 
   async function submit(e: React.FormEvent) {
@@ -70,7 +65,6 @@ export function NewOrderForm({
         body: JSON.stringify({
           ...form,
           rechargeAmount: Number(form.rechargeAmount),
-          linkedVoidOrderId,
           ...(needsOpener ? { openerId } : {}),
         }),
       });
@@ -92,11 +86,9 @@ export function NewOrderForm({
       <PageHeader
         title="新建业务"
         meta={
-          linkedVoidOrderId
-            ? "关联作废单重新办理 · 业绩仍算所选开单人"
-            : needsOpener
-              ? "请选择开单人（本人或队员）"
-              : "办理日默认为今天"
+          needsOpener
+            ? "开单人默认为本人，可改选队员"
+            : "办理日默认为今天 · 开单后可在详情激活"
         }
       />
       <NotionPanel className="max-w-lg">

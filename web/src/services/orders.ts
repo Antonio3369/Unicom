@@ -8,6 +8,7 @@ import { parseDateInput } from "@/lib/date-utils";
 import { startOfDay, startOfMonth, endOfMonth } from "date-fns";
 import type { Prisma } from "@/generated/prisma/client";
 import { performanceMonthRange } from "@/lib/performance-month";
+import { saveOrderAttachments } from "@/services/order-attachments";
 
 export async function getOrderForUser(orderId: string, user: SessionUser) {
   const order = await db.order.findUnique({
@@ -30,6 +31,7 @@ export async function activateOrder(input: {
   activateBackend: string;
   activatedAt: string;
   lateEntryNote?: string;
+  attachmentFiles?: File[];
 }) {
   const order = await getOrderForUser(input.orderId, input.user);
   if (order.status !== "PENDING" && order.status !== "EXPIRED") {
@@ -40,15 +42,17 @@ export async function activateOrder(input: {
 
   const backendName = input.activateBackend.trim();
   if (!backendName) throw new Error("请填写激活后台");
+  if (!input.attachmentFiles?.length) {
+    throw new Error("请上传至少 1 张激活凭证");
+  }
 
-  // 新后台名写入字典，供下次下拉
   await db.backendDict.upsert({
     where: { name: backendName },
     update: {},
     create: { name: backendName },
   });
 
-  return db.order.update({
+  const updated = await db.order.update({
     where: { id: order.id },
     data: {
       status: "COMPLETED",
@@ -59,6 +63,15 @@ export async function activateOrder(input: {
       wasEverExpired: order.status === "EXPIRED" ? true : order.wasEverExpired,
     },
   });
+
+  await saveOrderAttachments({
+    orderId: order.id,
+    user: input.user,
+    kind: "ACTIVATION",
+    files: input.attachmentFiles,
+  });
+
+  return updated;
 }
 
 export async function refundOrder(input: {
@@ -66,12 +79,17 @@ export async function refundOrder(input: {
   user: SessionUser;
   refundReason: string;
   refundNote?: string;
+  attachmentFiles?: File[];
 }) {
   const order = await getOrderForUser(input.orderId, input.user);
   if (order.status !== "PENDING" && order.status !== "EXPIRED") {
     throw new Error("当前状态不可退单");
   }
-  return db.order.update({
+  if (!input.attachmentFiles?.length) {
+    throw new Error("请上传至少 1 张沟通记录");
+  }
+
+  const updated = await db.order.update({
     where: { id: order.id },
     data: {
       status: "REFUNDED",
@@ -79,6 +97,15 @@ export async function refundOrder(input: {
       refundNote: input.refundNote,
     },
   });
+
+  await saveOrderAttachments({
+    orderId: order.id,
+    user: input.user,
+    kind: "REFUND",
+    files: input.attachmentFiles,
+  });
+
+  return updated;
 }
 
 export async function updatePendingInfo(input: {

@@ -18,6 +18,7 @@ import {
 } from "@/lib/order-rules";
 import { formatHandleDate } from "@/lib/date-utils";
 import { OrderStatusBadges } from "@/components/orders/OrderStatusBadges";
+import { PerformanceExportButton } from "@/components/performance/PerformanceExportButton";
 import {
   formatPerformanceMonthParam,
   parsePerformanceMonth,
@@ -68,6 +69,14 @@ export default async function StaffPerformancePage({
       <PageHeader
         title={staff.name}
         meta={`${monthTitle} · 开单人明细 · 所属经理 ${staff.managerName} · 共 ${stats.total} 单`}
+        actions={
+          <PerformanceExportButton
+            monthParam={monthParam}
+            staffId={staff.id}
+            staffName={staff.name}
+            status={statusFilter}
+          />
+        }
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">

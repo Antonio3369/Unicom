@@ -10,7 +10,7 @@ import {
 import { getSessionUser } from "@/lib/session";
 import { getDashboardStats } from "@/services/orders";
 import { getManagerSummaries, getStaffRanking } from "@/services/scope";
-import { PerformanceMonthPicker } from "@/components/performance/PerformanceMonthPicker";
+import { PerformanceHeaderActions } from "@/components/performance/PerformanceHeaderActions";
 import {
   formatPerformanceMonthParam,
   parsePerformanceMonth,
@@ -59,7 +59,7 @@ export default async function PerformancePage({
     <PageShell>
       <PageHeader
         title="业绩复盘"
-        actions={<PerformanceMonthPicker monthParam={monthParam} />}
+        actions={<PerformanceHeaderActions monthParam={monthParam} />}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">

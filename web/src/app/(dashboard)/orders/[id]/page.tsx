@@ -6,10 +6,14 @@ import { getSessionUser } from "@/lib/session";
 import { getOrderForUser } from "@/services/orders";
 import { db } from "@/lib/db";
 import { getActivatorOptions } from "@/services/scope";
+import { listOrderEditLogs } from "@/services/order-edits";
+import { listOrderAttachments } from "@/services/order-attachments";
 import { CARRIER_LABELS, hasFollowUp } from "@/lib/order-rules";
 import { formatHandleDate, formatFollowUpAt } from "@/lib/date-utils";
 import { FollowUpBadge } from "@/components/orders/FollowUpBadge";
 import { OrderDetailActions } from "@/components/orders/OrderDetailActions";
+import { OrderEditHistory } from "@/components/orders/OrderEditHistory";
+import { OrderAttachmentGallery } from "@/components/orders/OrderAttachmentPicker";
 import {
   OrderStatusBadges,
   orderStatusSummary,
@@ -30,14 +34,16 @@ export default async function OrderDetailPage({
     notFound();
   }
 
-  const staffOptions = await getActivatorOptions(user!);
+  const [staffOptions, backends, editLogs, attachments] = await Promise.all([
+    getActivatorOptions(user!),
+    db.backendDict.findMany({ orderBy: { name: "asc" } }).then((rows) => rows.map((b) => b.name)),
+    listOrderEditLogs(id, user!),
+    listOrderAttachments(id, user!),
+  ]);
+
   if (!staffOptions.find((s) => s.id === order.openerId)) {
     staffOptions.unshift({ id: order.opener.id, name: order.opener.name });
   }
-
-  const backends = (await db.backendDict.findMany({ orderBy: { name: "asc" } })).map(
-    (b) => b.name
-  );
 
   return (
     <PageShell>
@@ -94,9 +100,17 @@ export default async function OrderDetailPage({
               />
             </>
           )}
+          {order.status === "REFUNDED" && (
+            <>
+              <Row label="退单原因" value={order.refundReason ?? "—"} />
+              <Row label="退单说明" value={order.refundNote ?? "—"} />
+            </>
+          )}
           {order.wasEverExpired && (
             <Row label="过期记录" value={order.expiredReason ?? "曾系统过期"} />
           )}
+          <OrderAttachmentGallery orderId={order.id} attachments={attachments} />
+          <OrderEditHistory logs={editLogs} />
         </NotionPanel>
 
         <OrderDetailActions
@@ -105,6 +119,17 @@ export default async function OrderDetailPage({
             status: order.status,
             openerId: order.openerId,
             opener: order.opener,
+            handleDate: order.handleDate,
+            customerSurname: order.customerSurname,
+            phone: order.phone,
+            planType: order.planType,
+            rechargeAmount: order.rechargeAmount,
+            carrier: order.carrier,
+            openBackend: order.openBackend,
+            note: order.note,
+            activatorId: order.activatorId,
+            activateBackend: order.activateBackend,
+            activatedAt: order.activatedAt,
             wasEverExpired: order.wasEverExpired,
             planActivateAt: order.planActivateAt,
             pendingReason: order.pendingReason,

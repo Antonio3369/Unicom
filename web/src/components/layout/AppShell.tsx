@@ -11,11 +11,14 @@ import type { SessionUser } from "@/lib/permissions";
 type NavItem = { href: string; label: string; match?: "exact" | "prefix" };
 
 function buildNav(role: SessionUser["role"]): NavItem[] {
-  const items: NavItem[] = [
-    { href: "/", label: "今日待办", match: "exact" },
+  const items: NavItem[] = [{ href: "/", label: "今日待办", match: "exact" }];
+  if (role === "MANAGER" || role === "SALES") {
+    items.push({ href: "/orders/new", label: "新建业务", match: "prefix" });
+  }
+  items.push(
     { href: "/orders", label: "全部业务", match: "prefix" },
-    { href: "/performance", label: "业绩复盘", match: "prefix" },
-  ];
+    { href: "/performance", label: "业绩复盘", match: "prefix" }
+  );
   if (role === "ADMIN") {
     items.push({ href: "/admin/import", label: "导入对账", match: "prefix" });
   }
@@ -25,6 +28,9 @@ function buildNav(role: SessionUser["role"]): NavItem[] {
 
 function isActive(pathname: string, item: NavItem) {
   if (item.match === "exact") return pathname === item.href;
+  if (item.href === "/orders/new") {
+    return pathname === "/orders/new" || pathname.startsWith("/orders/new?");
+  }
   if (item.href === "/orders") {
     if (pathname === "/orders") return true;
     if (pathname === "/orders/new" || pathname.startsWith("/orders/new?")) {

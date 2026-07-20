@@ -11,13 +11,13 @@ function loginErrorMessage(code: string | null): string {
     case "CredentialsSignin":
       return "登录名或密码错误";
     case "Configuration":
-      return "登录服务配置异常，请重启开发服务后重试";
+      return "登录服务异常（多为本地数据库未启动）";
     default:
       return code ? "登录失败，请重试" : "";
   }
 }
 
-function LoginFormInner() {
+function LoginFormInner({ dbDown, dbHint }: { dbDown?: boolean; dbHint?: string }) {
   const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -49,13 +49,35 @@ function LoginFormInner() {
         callbackUrl: "/",
       });
 
-      if (!res?.ok) {
-        setError(loginErrorMessage(res?.error ?? "CredentialsSignin") || "登录失败，请重试");
+      if (res?.error) {
+        const msg = loginErrorMessage(res.error);
+        setError(
+          msg ||
+            (dbDown && dbHint
+              ? dbHint
+              : "登录失败，请重试")
+        );
         setLoading(false);
         return;
       }
 
-      // 勿用 res.url：dev 下常为 http://localhost:1771，手机局域网访问会跳错主机
+      if (!res?.ok) {
+        setError(dbDown && dbHint ? dbHint : "登录名或密码错误");
+        setLoading(false);
+        return;
+      }
+
+      const sessionRes = await fetch("/api/auth/session");
+      const session = await sessionRes.json();
+      if (!session?.user?.id) {
+        setError(
+          dbHint ??
+            "登录未生效，请确认本地数据库已启动（docker compose up -d && npm run db:push）"
+        );
+        setLoading(false);
+        return;
+      }
+
       window.location.assign("/");
     } catch {
       setError("网络异常，请确认 WiFi 与开发服务正常");
@@ -76,6 +98,7 @@ function LoginFormInner() {
         </div>
         <NotionPanel>
           <form onSubmit={onSubmit} className="space-y-4">
+            {dbDown && dbHint && <NotionAlert tone="error">{dbHint}</NotionAlert>}
             <label className="block space-y-1">
               <span className="text-sm text-[#64748b]">登录名</span>
               <input
@@ -113,10 +136,16 @@ function LoginFormInner() {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({
+  dbDown,
+  dbHint,
+}: {
+  dbDown?: boolean;
+  dbHint?: string;
+}) {
   return (
     <Suspense fallback={null}>
-      <LoginFormInner />
+      <LoginFormInner dbDown={dbDown} dbHint={dbHint} />
     </Suspense>
   );
 }

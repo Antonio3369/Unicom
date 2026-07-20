@@ -44,6 +44,11 @@ enum AnomalyType {
   MANAGER_MISMATCH
 }
 
+enum AttachmentKind {
+  ACTIVATION
+  REFUND
+}
+
 model User {
   id                 String     @id @default(cuid())
   username           String     @unique
@@ -58,6 +63,8 @@ model User {
   subordinates       User[]     @relation("UserHierarchy")
   openedOrders       Order[]    @relation("OrderOpener")
   activatedOrders    Order[]    @relation("OrderActivator")
+  orderAttachments   OrderAttachment[]
+  orderEditsMade     OrderEditLog[] @relation("OrderEdits")
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
@@ -103,12 +110,43 @@ model Order {
   importKey           String?     @unique
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
+  attachments         OrderAttachment[]
+  editLogs            OrderEditLog[]
 
   @@index([status])
   @@index([handleDate])
   @@index([managerId])
   @@index([openerId])
   @@index([phone])
+}
+
+model OrderAttachment {
+  id           String         @id @default(cuid())
+  orderId      String
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind         AttachmentKind
+  fileName     String
+  mimeType     String
+  storagePath  String
+  uploadedById String
+  uploadedBy   User           @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime       @default(now())
+
+  @@index([orderId])
+  @@index([orderId, kind])
+}
+
+model OrderEditLog {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  editorId  String
+  editor    User     @relation("OrderEdits", fields: [editorId], references: [id])
+  editNote  String?
+  changes   Json
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model ImportLog {

@@ -13,9 +13,20 @@ export default async function HomePage() {
   const user = await getSessionUser();
   const queues = await getWorkQueues(user!);
 
+  const canCreateOrder = user!.role === "MANAGER" || user!.role === "SALES";
+
   return (
     <PageShell>
-      <PageHeader title="今日待办" />
+      <PageHeader
+        title="今日待办"
+        actions={
+          canCreateOrder ? (
+            <NotionLinkButton href="/orders/new" variant="primary" className="w-full sm:w-auto">
+              ＋ 新建业务
+            </NotionLinkButton>
+          ) : undefined
+        }
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <QueueStatCard
