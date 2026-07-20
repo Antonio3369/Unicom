@@ -4,7 +4,7 @@
 > 罗湖试点跑通后，再扩展其他地区经理团队。  
 > 本文档供下次开发前快速查阅。
 
-**最后更新**：2026-07-21（订单修改 / 附件 / 业绩导出 · 详情操作区卡片化 · 本地 Docker PG）
+**最后更新**：2026-07-21（订单修改 / 附件 / 业绩导出已上生产 · 登录页动态渲染 · 移除页内默认密码提示）
 
 **仓库**：[github.com/Antonio3369/Unicom](https://github.com/Antonio3369/Unicom)  
 **本地根目录**：`/Users/xin/projects/Unicom`（应用在 `web/`，说明在本文档）
@@ -29,11 +29,11 @@
 
 ## 2. 本阶段停在哪里（2026-07-21）
 
-### 已具备（本地 + GitHub main）
+### 已具备（本地 + GitHub main + 生产 uni.orblead.com）
 
 - 路径：`web/`，开发端口 **http://localhost:1771**；`npm run dev` 绑定 `0.0.0.0` 并打印局域网地址供手机同 WiFi 访问
 - **本地库**：`docker compose up -d` → PostgreSQL **5433**（见 §4）；`.env` 对齐 `.env.example`
-- 认证：角色登录、首登强制改密；**手机局域网登录**勿跳 `localhost`；登录页 DB 不可达时红条提示
+- 认证：角色登录、首登强制改密；**手机局域网登录**勿跳 `localhost`；**本地** DB 不可达时登录页红条提示（`db-health.ts`）；**生产登录页**不展示默认密码，且无构建期误报
 - **今日待办**：四卡可点进对应队列；页头 **「＋ 新建业务」**（经理/队员）
 - **侧栏**：今日待办 · **新建业务**（经理/队员）· 全部业务 · 业绩复盘 · 导入对账（ADMIN）· 改密
 - **全部业务**：待激活未跟进优先 + 筛选（未跟进 / 已跟进 / 今日截止）；双状态徽章（待激活+已过期）
@@ -114,7 +114,7 @@ npm run dev              # http://localhost:1771
 | 姓名拼音，如 `zhoujie` | 队员 |
 
 **约定**：经理、队员默认登录名 = **中文名全拼小写**（`pinyin-pro`，无声调）；重名则 `linhao2`…  
-密码默认 `123456`；首登 `mustChangePassword=true` → `/settings/password`。  
+密码默认 `123456`（**仅 seed / 文档**，登录页不展示）；首登 `mustChangePassword=true` → `/settings/password`。  
 实现：`src/lib/username.ts`、`personnel-importer.ts`。
 
 **首登改密（对齐 Leadspace.Ali，只改一次）**：
@@ -143,7 +143,8 @@ npm run build
 | 改 schema 后字段报错 / 500 | Prisma Client 被 dev 进程缓存 | `npm run db:generate` 后**重启** `npm run dev` |
 | 一键导入找不到文件 | `.env` 仍指 `../data` | 对齐 `web/data/`，见 `.env.example` |
 | 手机登录后空白登录页 | NextAuth 成功 URL 为 `localhost` | 勿设 `AUTH_URL=localhost`；`LoginForm` 跳 `/`；dev 下 `useSecureCookies: false` |
-| 登录无提示 / 又回登录页 | 本地 PG 未起 | `docker compose up -d` → `db:push` → `db:seed`；登录页会红条提示 |
+| 登录无提示 / 又回登录页 | 本地 PG 未起 | `docker compose up -d` → `db:push` → `db:seed`；**仅本地**登录页会红条提示 |
+| 生产登录页误报「本地 PostgreSQL 未启动」 | `/login` 构建时被静态预渲染 | `login/page.tsx` 设 `export const dynamic = "force-dynamic"`；部署后硬刷新 |
 | 访问用 `0.0.0.0:1771` | 浏览器/host 异常 | 本机用 **localhost:1771** |
 
 ---
@@ -295,7 +296,7 @@ Web 是滞后录入工具，**已过期 ≠ 焊死**：
 
 | 路径 | 说明 |
 |---|---|
-| `/login` | 登录 |
+| `/login` | 登录（动态页；本地 DB 不可达红条；**不展示**默认密码） |
 | `/settings/password` | 改密 / 首登强制改密 |
 | `/` | **今日待办**：顶部四卡可滚动定位；①今日截止 ②其余待激活 ③过期待补录 ④本月已完成 |
 | `/orders` | **全部业务**；待激活：未跟进优先排序，可筛跟进状态 / 今日截止 |
@@ -460,10 +461,10 @@ unicom/
 | ~~P2~~ | ~~业绩复盘导出 Excel~~（2026-07-21） |
 | ~~P2~~ | ~~激活/退单附件上传~~（2026-07-21） |
 | ~~P2~~ | ~~Web 订单修改 + 取消重新开单~~（2026-07-21） |
+| ~~P2~~ | ~~2026-07-21 功能上生产~~（`db push` + 重建 app，2026-07-21 晚） |
 | P2 | 导入预览页（写入前确认过期/补完成条数） |
 | P3 | 其它地区经理名单导入体验；同手机号历史提示 |
 | P3 | 套餐/运营商分布图（recharts 已装未用） |
-| 待部署 | 上述 2026-07-21 功能需同步生产（`db push` + 重建 app） |
 
 ---
 
@@ -509,6 +510,8 @@ AUTH_URL=https://uni.orblead.com
 
 **勿**在生产写 `AUTH_URL=http://localhost:...`。
 
+**注意**：依赖运行时 DB 的页面（如 `/login` 健康检查）须 `force-dynamic`，避免 `next build` 无 DB 时把错误文案 bake 进静态 HTML。
+
 ### 15.4 部署命令
 
 ```bash
@@ -539,7 +542,7 @@ web/docker-compose.prod.yml
 
 ### 15.5 部署后检查
 
-- [x] https://uni.orblead.com/login 可打开
+- [x] https://uni.orblead.com/login 可打开（无「本地 PostgreSQL」误报、无默认密码文案）
 - [x] `admin` / 经理 / 队员登录正常（redirect 须返回绝对 URL，见 `auth.config.ts`）
 - [x] `sudo docker ps`：`leadspace-unicom-app`、`leadspace-unicom-postgres` Up
 - [x] ali.orblead.com、hk.orblead.com 仍正常
@@ -550,7 +553,7 @@ web/docker-compose.prod.yml
 
 | 问题 | 先看 |
 |---|---|
-| 登录 / Session | `auth.ts`, `auth.config.ts`（redirect 勿返回相对 `/`）, `LoginForm.tsx` |
+| 登录 / Session | `auth.ts`, `auth.config.ts`, `LoginForm.tsx`, `db-health.ts`（redirect 勿返回相对 `/`） |
 | 经理开单 | `NewOrderForm.tsx`, `scope.ts`, `orders.ts`（`createOrder`） |
 | 订单修改 | `order-edits.ts`, `OrderDetailActions.tsx`, `PATCH action:edit` |
 | 激活 / 退单 + 附件 | `POST .../activate`, `POST .../refund`, `order-attachments.ts` |

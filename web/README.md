@@ -19,7 +19,7 @@ npm run dev:setup      # 或分步：install → db:push → db:seed → dev
 
 改 `schema.prisma` 后须 `npm run db:generate` 并**重启** dev。
 
-## 演示账号（密码 `123456`）
+## 演示账号（密码 `123456`，**仅本地/文档**，登录页不展示）
 
 | 登录名 | 角色 |
 |--------|------|
