@@ -126,9 +126,6 @@ function LoginFormInner({ dbDown, dbHint }: { dbDown?: boolean; dbHint?: string 
             <NotionButton type="submit" disabled={loading} className="w-full">
               {loading ? "登录中…" : "登录"}
             </NotionButton>
-            <p className="text-xs text-[#94a3b8] text-center sm:text-left">
-              开发默认密码：123456
-            </p>
           </form>
         </NotionPanel>
       </div>
