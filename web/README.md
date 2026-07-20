@@ -6,6 +6,7 @@
 |---|---|
 | 仓库 | [Antonio3369/Unicom](https://github.com/Antonio3369/Unicom) |
 | 完整约定 | 上级目录 [Leadspace.Unicom.md](../Leadspace.Unicom.md) |
+| **生产** | **https://uni.orblead.com** |
 | 本地 | `cd web && npm run dev` → 本机 http://localhost:1771；**手机**用终端里打印的 `http://192.168.x.x:1771`（同 WiFi，勿用 localhost） |
 
 ## 本地启动
@@ -80,3 +81,22 @@ web/data/
 Next.js 16 · Prisma 7 · SQLite · NextAuth · Tailwind  
 
 工程上参考 Leadspace-Ali **N7**，产品形态是工作队列而非考核看板。
+
+## 生产部署
+
+| 项 | 值 |
+|---|---|
+| 地址 | **https://uni.orblead.com** |
+| 服务器 | 腾讯云 `43.136.25.181`（SSH `sales-cloud`，与 ali / hk 共用） |
+| 远程目录 | `/opt/leadspace-unicom` |
+| 容器端口 | `127.0.0.1:3002` → Nginx |
+
+```bash
+cd web
+npm run build                              # 部署前必过
+./deploy/push-and-deploy.sh                # rsync + 远程 docker build
+ssh sales-cloud 'cd /opt/leadspace-unicom && ./deploy/setup-ssl.sh'   # 首次 DNS 生效后
+ssh sales-cloud 'cd /opt/leadspace-unicom && ./deploy/install-expire-cron.sh'
+```
+
+详见 [Leadspace.Unicom.md](../Leadspace.Unicom.md) §15。

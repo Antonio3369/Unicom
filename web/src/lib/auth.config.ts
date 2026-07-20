@@ -37,14 +37,16 @@ export const authConfig = {
   // 与 middleware 共用：dev 下 HTTP + 局域网 IP 勿用 Secure Cookie
   ...(isDev ? { useSecureCookies: false as const } : {}),
   callbacks: {
-    // dev 下 baseUrl 常为 localhost，手机用局域网 IP 时勿跳 localhost
-    redirect({ url }) {
-      if (url.startsWith("/")) return url;
+    // signIn(redirect:false) 内会 new URL(data.url)，相对路径 "/" 会抛错 → 前端显示「网络异常」
+    redirect({ url, baseUrl }) {
+      const origin = new URL(baseUrl).origin;
+      if (url.startsWith("/")) return `${origin}${url}`;
       try {
-        const { pathname, search, hash } = new URL(url);
-        return `${pathname}${search}${hash}` || "/";
+        const parsed = new URL(url);
+        if (parsed.origin === origin) return url;
+        return `${origin}${parsed.pathname}${parsed.search}${parsed.hash}` || `${origin}/`;
       } catch {
-        return "/";
+        return `${origin}/`;
       }
     },
     authorized({ auth, request }) {

@@ -28,7 +28,8 @@ export async function previewOrdersFile(
   filePath: string,
   refDate = new Date()
 ): Promise<OrdersImportPreview> {
-  return importOrdersFile(filePath, refDate, { dryRun: true });
+  const result = await importOrdersFile(filePath, refDate, { dryRun: true });
+  return result as OrdersImportPreview;
 }
 
 export async function importOrdersFile(

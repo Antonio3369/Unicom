@@ -8,6 +8,11 @@ if [ ! -f .env ]; then
   echo "已创建 .env（来自 .env.example）"
 fi
 
+echo "→ 启动本地 PostgreSQL（5433）"
+docker compose up -d
+echo "→ 等待数据库就绪..."
+sleep 3
+
 echo "→ npm install"
 npm install
 

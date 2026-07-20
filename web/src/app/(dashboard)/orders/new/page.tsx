@@ -29,7 +29,7 @@ export default async function NewOrderPage({
         phone: voidOrder.phone,
         planType: voidOrder.planType,
         rechargeAmount: String(voidOrder.rechargeAmount),
-        carrier: voidOrder.carrier,
+        carrier: voidOrder.carrier ?? undefined,
       };
     } catch {
       notFound();

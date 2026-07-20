@@ -4,7 +4,7 @@
 > 罗湖试点跑通后，再扩展其他地区经理团队。  
 > 本文档供下次开发前快速查阅。
 
-**最后更新**：2026-07-20（经理 Web 开单/重办、移动端与局域网登录、权限与报错收口；代码已推 GitHub）
+**最后更新**：2026-07-20（已上线 https://uni.orblead.com · PostgreSQL 生产 · 登录 redirect 修复）
 
 **仓库**：[github.com/Antonio3369/Unicom](https://github.com/Antonio3369/Unicom)  
 **本地根目录**：`/Users/Eric/Desktop/agent/unicom`（应用在 `web/`，说明在本文档）
@@ -45,8 +45,7 @@
 
 ### 未做（下次优先看 §14）
 
-- 生产部署、每日 10:00 过期 cron
-- 导出 Excel、退单附件、导入预览向导
+- 导出 Excel、退单附件
 - 其它地区名单导入体验打磨
 
 **注意**：`data/*.xlsx`、`.env`、`dev.db` **不入库**（见根目录 `.gitignore`）。
@@ -59,7 +58,7 @@
 |---|---|
 | 框架 | Next.js 16（App Router） |
 | 语言 | TypeScript |
-| 数据库 | SQLite + Prisma 7（`@prisma/adapter-better-sqlite3`） |
+| 数据库 | 本地 Docker **PostgreSQL**（5433）+ Prisma 7（`@prisma/adapter-pg`）；生产同 Ali 模式 |
 | 认证 | NextAuth.js v5（JWT；middleware 只用 `auth.config`，勿在 Edge 里 import Prisma） |
 | 样式 | Tailwind CSS 4 + `src/components/ui/notion.tsx` |
 | Excel | xlsx |
@@ -408,8 +407,8 @@ unicom/
 
 | 优先级 | 内容 |
 |---|---|
-| P1 | 生产部署（库可换 PostgreSQL） |
-| P1 | 每日 10:00 过期 cron（`npm run expire:run`） |
+| ~~P1~~ | ~~首次上线 https://uni.orblead.com~~（已完成 2026-07-20） |
+| ~~P1~~ | ~~每日 10:00 过期 cron~~（`deploy/install-expire-cron.sh` 已装） |
 | P2 | 列表导出 Excel |
 | P2 | 退单沟通记录附件上传 |
 | P2 | 导入预览页（写入前确认过期/补完成条数） |
@@ -418,11 +417,90 @@ unicom/
 
 ---
 
-## 15. 快速定位问题
+## 15. 生产部署规范
+
+### 15.1 线上环境
+
+| 项 | 值 |
+|---|---|
+| **访问地址** | **https://uni.orblead.com** |
+| 服务器 | 腾讯云轻量，与 **ali.orblead** / **hk.orblead** 共用（`43.136.25.181`） |
+| SSH 别名 | `sales-cloud`（`~/.ssh/config`） |
+| 项目目录 | `/opt/leadspace-unicom` |
+| 应用容器 | `leadspace-unicom-app` → `127.0.0.1:3002` |
+| 数据库 | Docker **PostgreSQL 16**（`leadspace-unicom-postgres`，独立 volume） |
+| 上传目录 | Docker volume `/app/uploads` |
+| Nginx 配置 | `/etc/nginx/conf.d/uni-orblead.conf` |
+| 兄弟服务 | ali `:3001`、hk `:3080`，互不影响 |
+
+### 15.2 DNS（上线前）
+
+在腾讯云 DNS 为 **uni.orblead.com** 添加 **A 记录** → `43.136.25.181`，生效后再跑 SSL。
+
+### 15.3 发布流程（须遵守）
+
+```
+1. 本地改代码
+2. cd web && npm run build
+3. npm run dev + 浏览器点验
+4. 负责人确认「可以部署」
+5. cd web && ./deploy/push-and-deploy.sh
+6. 首次：ssh sales-cloud 'cd /opt/leadspace-unicom && ./deploy/setup-ssl.sh'
+7. 首次：ssh sales-cloud 'cd /opt/leadspace-unicom && ./deploy/install-expire-cron.sh'
+8. 线上抽查 https://uni.orblead.com
+```
+
+服务器 `.env` 必含：
+
+```env
+AUTH_SECRET=...
+AUTH_URL=https://uni.orblead.com
+```
+
+**勿**在生产写 `AUTH_URL=http://localhost:...`。
+
+### 15.4 部署命令
+
+```bash
+cd web
+npm run build
+./deploy/push-and-deploy.sh
+
+# 仅重建应用
+ssh sales-cloud 'cd /opt/leadspace-unicom && sudo docker compose -f docker-compose.prod.yml up -d --build app'
+
+# 首次灌样例数据（需先把 xlsx 放到服务器 web/data/）
+ssh sales-cloud 'cd /opt/leadspace-unicom && RUN_DB_SEED=1 ./deploy/server-deploy.sh'
+```
+
+相关文件：
+
+```
+web/deploy/
+├── push-and-deploy.sh
+├── server-deploy.sh
+├── setup-ssl.sh
+├── install-expire-cron.sh
+├── env.production.example
+└── nginx/uni.orblead.com.conf
+web/Dockerfile
+web/docker-compose.prod.yml
+```
+
+### 15.5 部署后检查
+
+- [x] https://uni.orblead.com/login 可打开
+- [x] `admin` / 经理 / 队员登录正常（redirect 须返回绝对 URL，见 `auth.config.ts`）
+- [x] `sudo docker ps`：`leadspace-unicom-app`、`leadspace-unicom-postgres` Up
+- [x] ali.orblead.com、hk.orblead.com 仍正常
+
+---
+
+## 16. 快速定位问题
 
 | 问题 | 先看 |
 |---|---|
-| 登录 / Session | `auth.ts`, `auth.config.ts`, `middleware.ts`, `LoginForm.tsx` |
+| 登录 / Session | `auth.ts`, `auth.config.ts`（redirect 勿返回相对 `/`）, `LoginForm.tsx` |
 | 经理开单 / 重办 | `NewOrderForm.tsx`, `scope.ts`（`getCreateOpenerOptions`）, `orders.ts`（`createOrder`） |
 | 激活人下拉 | `scope.ts`（`getActivatorOptions`）, `orders/[id]/page.tsx` |
 | 过期对不对 | `order-rules.ts`, `date-utils.ts`, seed 年份 |
@@ -432,11 +510,11 @@ unicom/
 | 用户看到技术报错 | `src/lib/api-error.ts`（`toUserError` 过滤 Prisma/堆栈；业务 Error 原样返回） |
 | 返回错页 / 滚丢 | `HistoryBackLink.tsx`, `mainScroll.ts`, `ScrollMemory.tsx` |
 | 人员排名 / 下钻 | `scope.ts`（`getStaffRanking` / `getStaffPerformance`）、`performance/*` |
-| 待办卡片不跳 | `QueueStatCard.tsx`、首页 `#queue-*` id |
+| 部署 / 域名 | `web/deploy/`、`docker-compose.prod.yml`、`Leadspace.Unicom.md` §15 |
 
 ---
 
-## 16. Git / 推送说明
+## 17. Git / 推送说明
 
 ```bash
 cd /Users/Eric/Desktop/agent/unicom
