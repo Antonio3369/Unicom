@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/layout/SignOutButton";
 import { ScrollMemory } from "@/components/layout/ScrollMemory";
+import { ScrollToTopButton } from "@/components/layout/ScrollToTopButton";
 import { markSidebarNavTop } from "@/lib/mainScroll";
 import type { SessionUser } from "@/lib/permissions";
 
@@ -62,10 +63,11 @@ export function AppShell({
   const nav = buildNav(user.role);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f4f6f9] flex">
+    <div className="h-[100dvh] overflow-hidden bg-[#f4f6f9] flex">
       <Suspense fallback={null}>
         <ScrollMemory />
       </Suspense>
+      <ScrollToTopButton />
       <aside className="w-56 shrink-0 border-r border-[#eef2f7] bg-white p-4 hidden md:flex md:flex-col">
         <div className="mb-8">
           <p className="text-xs font-semibold text-[#94a3b8] uppercase">联通业务</p>
@@ -126,7 +128,7 @@ export function AppShell({
         </div>
         <main
           id="app-scroll"
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-8 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-8 pb-[max(6rem,calc(env(safe-area-inset-bottom,0px)+5rem))] md:pb-8"
         >
           <div className="max-w-7xl w-full">{children}</div>
         </main>
