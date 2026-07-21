@@ -37,8 +37,9 @@ npm run dev:setup      # 或分步：install → db:push → db:seed → dev
 | `/performance` | 业绩复盘 + **导出 Excel** |
 | `/performance/staff/[id]` | 队员明细（可按状态筛）+ **导出 Excel** |
 | `/admin/import` | 导入对账（ADMIN） |
+| `/settings/password` | 改密（与主站同 **手机顶栏 Tab**） |
 
-侧栏：**新建业务**（经理/队员）、全部业务、业绩复盘、导入对账（ADMIN）。
+侧栏 / 手机顶栏：**新建业务**（经理/队员）、全部业务、业绩复盘、导入对账（ADMIN）、改密。长页面向下滚动后出现 **↑ 顶部**。
 
 ## 关键规则（摘要）
 

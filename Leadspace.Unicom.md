@@ -4,7 +4,7 @@
 > 罗湖试点跑通后，再扩展其他地区经理团队。  
 > 本文档供下次开发前快速查阅。
 
-**最后更新**：2026-07-21（订单修改 / 附件 / 业绩导出已上生产 · 登录页动态渲染 · 移除页内默认密码提示）
+**最后更新**：2026-07-22（移动端顶栏统一 · 滚动留白 · 改密页纳入 AppShell · 回顶辅助按钮）
 
 **仓库**：[github.com/Antonio3369/Unicom](https://github.com/Antonio3369/Unicom)  
 **本地根目录**：`/Users/xin/projects/Unicom`（应用在 `web/`，说明在本文档）
@@ -27,7 +27,7 @@
 
 ---
 
-## 2. 本阶段停在哪里（2026-07-21）
+## 2. 本阶段停在哪里（2026-07-22）
 
 ### 已具备（本地 + GitHub main + 生产 uni.orblead.com）
 
@@ -35,7 +35,8 @@
 - **本地库**：`docker compose up -d` → PostgreSQL **5433**（见 §4）；`.env` 对齐 `.env.example`
 - 认证：角色登录、首登强制改密；**手机局域网登录**勿跳 `localhost`；**本地** DB 不可达时登录页红条提示（`db-health.ts`）；**生产登录页**不展示默认密码，且无构建期误报
 - **今日待办**：四卡可点进对应队列；页头 **「＋ 新建业务」**（经理/队员）
-- **侧栏**：今日待办 · **新建业务**（经理/队员）· 全部业务 · 业绩复盘 · 导入对账（ADMIN）· 改密
+- **侧栏 / 手机顶栏**：桌面侧栏 + **手机横滑 Tab**（今日待办 · 新建业务 · 全部业务 · 业绩复盘 · 导入/改密 · 退出）；**所有 `(dashboard)` 页统一**，含 `/settings/password`
+- **移动端滚动**：主滚动在 `#app-scroll`（`100dvh` + 底部留白防 Safari 挡字）；长页面向下滚动后显示 **「↑ 顶部」**（`ScrollToTopButton`）
 - **全部业务**：待激活未跟进优先 + 筛选（未跟进 / 已跟进 / 今日截止）；双状态徽章（待激活+已过期）
 - **新建**（`/orders/new`）：**开单人默认当前登录用户**；经理可改选队员；管理员 **不做 Web 开单**
 - **详情 · 操作区**（彩色独立卡片）：
@@ -146,6 +147,8 @@ npm run build
 | 登录无提示 / 又回登录页 | 本地 PG 未起 | `docker compose up -d` → `db:push` → `db:seed`；**仅本地**登录页会红条提示 |
 | 生产登录页误报「本地 PostgreSQL 未启动」 | `/login` 构建时被静态预渲染 | `login/page.tsx` 设 `export const dynamic = "force-dynamic"`；部署后硬刷新 |
 | 访问用 `0.0.0.0:1771` | 浏览器/host 异常 | 本机用 **localhost:1771** |
+| 手机列表滚不到最底 | iOS Safari 底栏 + `100vh` | `AppShell` 用 `100dvh`，`#app-scroll` 加大 `padding-bottom` |
+| 改密页无手机顶栏 Tab | 改密页曾独立于 `(dashboard)` | 路由仍在 `/settings/password`，页面在 `(dashboard)/settings/password`，走 `AppShell` |
 
 ---
 
@@ -297,7 +300,7 @@ Web 是滞后录入工具，**已过期 ≠ 焊死**：
 | 路径 | 说明 |
 |---|---|
 | `/login` | 登录（动态页；本地 DB 不可达红条；**不展示**默认密码） |
-| `/settings/password` | 改密 / 首登强制改密 |
+| `/settings/password` | 改密 / 首登强制改密（**`(dashboard)` + AppShell 顶栏**；非首登有「← 返回」） |
 | `/` | **今日待办**：顶部四卡可滚动定位；①今日截止 ②其余待激活 ③过期待补录 ④本月已完成 |
 | `/orders` | **全部业务**；待激活：未跟进优先排序，可筛跟进状态 / 今日截止 |
 | `/orders/new` | **新建业务**（经理/队员；开单人默认登录用户） |
@@ -309,6 +312,8 @@ Web 是滞后录入工具，**已过期 ≠ 焊死**：
 | `/follow-up` | 重定向到 `/`（兼容旧链） |
 
 侧栏：今日待办 · **新建业务**（MANAGER/SALES）· 全部业务 · 业绩复盘 · 导入对账（ADMIN）· 修改密码。
+
+**手机顶栏**（`AppShell` · `md:hidden`）：与侧栏同组入口，固定在 `#app-scroll` 上方，**登录后各业务页均可见**（仅 `/login` 除外）。
 
 ### 7.1 业绩复盘交互约定
 
@@ -395,11 +400,12 @@ unicom/
         ├── app/(dashboard)/
         │   ├── page.tsx                 # 今日待办
         │   ├── orders/ …                # 全部业务 / 新建 / 详情
-        │   ├── performance/
-        │   │   └── …                    # 含 PerformanceExportButton
+        │   ├── performance/ …           # 含 PerformanceExportButton
+        │   ├── settings/password/       # 改密（须走 AppShell）
         │   └── admin/import/
         ├── components/
-        │   ├── layout/AppShell.tsx      # 侧栏含「新建业务」
+        │   ├── layout/AppShell.tsx      # 侧栏 + 手机顶栏 Tab
+        │   ├── layout/ScrollToTopButton.tsx
         │   ├── orders/OrderDetailActions.tsx  # ★ 操作卡片 UI
         │   ├── orders/OrderEditHistory.tsx · OrderAttachmentPicker.tsx
         │   └── …
@@ -543,6 +549,7 @@ web/docker-compose.prod.yml
 ### 15.5 部署后检查
 
 - [x] https://uni.orblead.com/login 可打开（无「本地 PostgreSQL」误报、无默认密码文案）
+- [x] 手机：**改密 / 业绩复盘 / 今日待办** 均有顶栏 Tab；长列表可滚到底
 - [x] `admin` / 经理 / 队员登录正常（redirect 须返回绝对 URL，见 `auth.config.ts`）
 - [x] `sudo docker ps`：`leadspace-unicom-app`、`leadspace-unicom-postgres` Up
 - [x] ali.orblead.com、hk.orblead.com 仍正常
@@ -554,6 +561,7 @@ web/docker-compose.prod.yml
 | 问题 | 先看 |
 |---|---|
 | 登录 / Session | `auth.ts`, `auth.config.ts`, `LoginForm.tsx`, `db-health.ts`（redirect 勿返回相对 `/`） |
+| 手机顶栏 / 滚动 | `AppShell.tsx`, `ScrollToTopButton.tsx`, `mainScroll.ts`（`#app-scroll`） |
 | 经理开单 | `NewOrderForm.tsx`, `scope.ts`, `orders.ts`（`createOrder`） |
 | 订单修改 | `order-edits.ts`, `OrderDetailActions.tsx`, `PATCH action:edit` |
 | 激活 / 退单 + 附件 | `POST .../activate`, `POST .../refund`, `order-attachments.ts` |
