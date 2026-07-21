@@ -2,11 +2,18 @@
 
 import { useState } from "react";
 import { signIn, signOut } from "next-auth/react";
-import { NotionButton, NotionPanel, NotionAlert } from "@/components/ui/notion";
+import { NotionButton, NotionPanel, NotionAlert, PageHeader, PageShell } from "@/components/ui/notion";
 import { NotionPasswordInput } from "@/components/ui/NotionPasswordInput";
+import { HistoryBackLink } from "@/components/ui/HistoryBackLink";
 import { readApiError, networkErrorMessage } from "@/lib/api-error";
 
-export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
+export function ChangePasswordForm({
+  forced = false,
+  embedded = false,
+}: {
+  forced?: boolean;
+  embedded?: boolean;
+}) {
   // 锁定首登模式，避免改密成功后父级重渲染把 forced 打成 false
   const [isForced] = useState(forced);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -80,6 +87,60 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
     }
   }
 
+  const formBody = doneHint ? (
+    <p className="text-sm text-emerald-700">{doneHint}</p>
+  ) : (
+    <form onSubmit={onSubmit} className="space-y-4">
+      {!isForced && (
+        <label className="block space-y-1">
+          <span className="text-sm text-[#64748b]">当前密码</span>
+          <NotionPasswordInput
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+      )}
+      <label className="block space-y-1">
+        <span className="text-sm text-[#64748b]">新密码</span>
+        <NotionPasswordInput
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          placeholder="至少 6 位"
+          autoComplete="new-password"
+          required
+        />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-sm text-[#64748b]">确认新密码</span>
+        <NotionPasswordInput
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="再次输入新密码"
+          autoComplete="new-password"
+          required
+        />
+      </label>
+      {error && <NotionAlert tone="error">{error}</NotionAlert>}
+      <NotionButton type="submit" disabled={loading} className="w-full">
+        {loading ? "保存中…" : isForced ? "保存并继续" : "保存新密码"}
+      </NotionButton>
+    </form>
+  );
+
+  if (embedded) {
+    return (
+      <PageShell>
+        {!isForced && <HistoryBackLink label="← 返回" fallbackHref="/" />}
+        <PageHeader
+          title="修改密码"
+          meta={isForced ? "首次登录须设置新密码后方可继续" : undefined}
+        />
+        <NotionPanel className="max-w-md">{formBody}</NotionPanel>
+      </PageShell>
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] bg-[#f4f6f9] flex items-center justify-center px-4 py-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <div className="max-w-md mx-auto w-full">
@@ -94,49 +155,8 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
             <p className="text-sm text-[#64748b] mt-2">首次登录须设置新密码后方可继续</p>
           )}
         </div>
-        <NotionPanel>
-            {doneHint ? (
-              <p className="text-sm text-emerald-700">{doneHint}</p>
-            ) : (
-              <form onSubmit={onSubmit} className="space-y-4">
-                {!isForced && (
-                  <label className="block space-y-1">
-                    <span className="text-sm text-[#64748b]">当前密码</span>
-                    <NotionPasswordInput
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      autoComplete="current-password"
-                    />
-                  </label>
-                )}
-                <label className="block space-y-1">
-                  <span className="text-sm text-[#64748b]">新密码</span>
-                  <NotionPasswordInput
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="至少 6 位"
-                    autoComplete="new-password"
-                    required
-                  />
-                </label>
-                <label className="block space-y-1">
-                  <span className="text-sm text-[#64748b]">确认新密码</span>
-                  <NotionPasswordInput
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="再次输入新密码"
-                    autoComplete="new-password"
-                    required
-                  />
-                </label>
-                {error && <NotionAlert tone="error">{error}</NotionAlert>}
-                <NotionButton type="submit" disabled={loading} className="w-full">
-                  {loading ? "保存中…" : isForced ? "保存并继续" : "保存新密码"}
-                </NotionButton>
-              </form>
-            )}
-          </NotionPanel>
-        </div>
+        <NotionPanel>{formBody}</NotionPanel>
+      </div>
     </div>
   );
 }
